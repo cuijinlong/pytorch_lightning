@@ -1,4 +1,4 @@
-# train_lightning.py
+# /opt/pytorch_lightning/trainer/train_lightning.py
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -15,8 +15,8 @@ def main():
         'test_csv': f"{base_dir}/test_metadata.csv",
         'image_col': "image_path",
         'label_col': "label",
-        'batch_size': 32,
-        'num_workers': 4,
+        'batch_size': 64,
+        'num_workers': 0, # 公司的3090显卡：0（推荐）
         'image_size': (224, 224),
 
         # 训练参数
@@ -67,13 +67,15 @@ def main():
     trainer = pl.Trainer(
         max_epochs=20,
         accelerator='auto',  # 自动选择GPU/CPU
-        devices='auto',      # 自动选择设备数量
+        devices=1,      # 自动选择设备数量
         logger=logger,
         callbacks=[checkpoint_callback, early_stop_callback, lr_monitor],
         deterministic=True,  # 保证可重复性
         log_every_n_steps=10,
         check_val_every_n_epoch=1,
         enable_progress_bar=True,
+        num_sanity_val_steps=0,  # 禁用初始验证检查
+        enable_model_summary=False,  # 禁用模型摘要
     )
 
     # 训练模型

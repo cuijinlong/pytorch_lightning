@@ -7,27 +7,44 @@ class ResNetDataModule(pl.LightningDataModule):
         super().__init__()
         self.config = config
         self.data_loader = SingleModalDataLoader(config)
+        self._train_loader = None
+        self._val_loader = None
+        self._test_loader = None
+        self._is_initialized = False
+
+    def _ensure_initialized(self):
+        """确保数据加载器已经初始化"""
+        if not self._is_initialized:
+            self.setup()
+            self._is_initialized = True
 
     def setup(self, stage=None):
-        # 不需要手动调用，Lightning 会自动在合适的时候调用
-        self.train_loader, self.val_loader, self.test_loader = self.data_loader.create_data_loaders()
+        if self._train_loader is None:
+            self._train_loader, self._val_loader, self._test_loader = self.data_loader.create_data_loaders()
+            self._is_initialized = True
 
     def train_dataloader(self):
-        return self.train_loader
+        self._ensure_initialized()
+        return self._train_loader
 
     def val_dataloader(self):
-        return self.val_loader
+        self._ensure_initialized()
+        return self._val_loader if self._val_loader else self._train_loader
 
     def test_dataloader(self):
-        return self.test_loader
+        self._ensure_initialized()
+        return self._test_loader if self._test_loader else self._val_loader
 
     def predict_dataloader(self):
-        return self.test_loader
+        self._ensure_initialized()
+        return self.test_dataloader()
 
     @property
     def num_classes(self):
+        self._ensure_initialized()
         return self.data_loader.get_num_classes()
 
     @property
     def label_dict(self):
+        self._ensure_initialized()
         return self.data_loader.get_label_dict()
