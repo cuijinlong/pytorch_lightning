@@ -4,6 +4,7 @@
 二、进入FinalShell启动tensorboard
 cd /opt/pytorch_lightning/trainer/lightning
 conda activate pytorch_lightning
+# 重置代理
 unset http_proxy && unset https_proxy && unset HTTP_PROXY && unset HTTPS_PROXY
 tensorboard --logdir=lightning_logs/ --port 6006 --host 0.0.0.0
 
