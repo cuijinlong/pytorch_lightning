@@ -118,7 +118,7 @@ def check_multiple_images(image_paths):
 if __name__ == "__main__":
     # 替换为您的实际图片路径
     image_paths = [
-        "/opt/datasets/pathmnist/output_dataset_multimodal/test/background/pathmnist_000681.png"
+        "/opt/datasets/pathmnist/output_dataset_basic/test/background/pathmnist_000145.png"
         # 在这里添加您的图片路径
         # "/path/to/your/image1.jpg",
         # "/path/to/your/image2.png",
