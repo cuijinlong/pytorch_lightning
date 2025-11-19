@@ -6,12 +6,12 @@ from predict_lightning import LightningPredictor
 # train_main()
 
 # 使用训练好的模型进行预测
-checkpoint_path = "lightning_checkpoints/resnet-epoch=15-val_acc=0.95.ckpt"
+checkpoint_path = "lightning_checkpoints/resnet-epoch=11-val_acc=1.00.ckpt"
 predictor = LightningPredictor(checkpoint_path)
 
 # 单张图像预测
-result = predictor.predict_image("test_image.jpg")
+result = predictor.predict_image("/opt/datasets/pathmnist/output_dataset_basic/test/debris/pathmnist_000328.png")
 print(result)
 
 # 批量预测
-results = predictor.predict_batch("test_images/")
+# results = predictor.predict_batch("test_images/")
