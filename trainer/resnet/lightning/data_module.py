@@ -1,6 +1,6 @@
 # D:\workspace_py\pytorch_lightning\trainer\lightning\data_module.py
 import pytorch_lightning as pl
-from dataset.single_modal_data_loader import SingleModalDataLoader
+from dataset.custom.single_modal_data_loader import SingleModalDataLoader
 
 class ResNetDataModule(pl.LightningDataModule):
     def __init__(self, config):

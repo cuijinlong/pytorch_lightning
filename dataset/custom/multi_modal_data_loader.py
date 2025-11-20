@@ -11,7 +11,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 import albumentations as A
-from dataset.utils.image_augmentation import ImageAugmentation
+from dataset.custom.utils.image_augmentation import ImageAugmentation
 
 
 # ======================================================================

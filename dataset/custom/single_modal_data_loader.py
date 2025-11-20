@@ -8,7 +8,7 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import LabelEncoder
 import albumentations as A
-from dataset.utils.image_augmentation import ImageAugmentation
+from dataset.custom.utils.image_augmentation import ImageAugmentation
 
 
 # ======================================================================

@@ -6,7 +6,7 @@ import time
 import os
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
-from dataset.single_modal_data_loader import SingleModalDataLoader
+from dataset.custom.single_modal_data_loader import SingleModalDataLoader
 
 class ResNetTrainer:
     def __init__(self, config):
