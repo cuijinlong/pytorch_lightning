@@ -19,6 +19,7 @@ def main(resume_from_checkpoint=None):
         'batch_size': 64,
         'num_workers': 0,
         'image_size': (224, 224),
+        'max_epochs': 20,
 
         # 训练参数
         'model_name': 'resnet18',
@@ -77,7 +78,7 @@ def main(resume_from_checkpoint=None):
 
     # 训练器
     trainer = pl.Trainer(
-        max_epochs=20,
+        max_epochs=config['max_epochs'],
         accelerator='auto',
         devices=1,
         logger=logger,

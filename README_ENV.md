@@ -5,7 +5,7 @@ netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=2222 conne
 netsh advfirewall firewall add rule name=WSL2 dir=in action=allow protocol=TCP localport=2222
 
 二、 在GPU服务器上创建Conda环境
-unset http_proxy && unset https_proxy
+unset http_proxy && unset https_proxy && unset HTTP_PROXY && unset HTTPS_PROXY
 conda create --name pytorch_lightning  python==3.10
 conda activate pytorch_lightning
 三、在本地Pycharm配置GPU服务器上的Conda环境
@@ -17,7 +17,8 @@ conda activate pytorch_lightning
 3、点击 Create。
 
 四、安装依赖包
-pip install torch==2.2 torchvision==0.17.0 torchmetrics==0.7.0 lightning==2.2 numpy==1.24.3 pandas==2.3.3 pillow==12.0.0 openpyxl
+pip install torch==2.2 torchvision==0.17.0 torchaudio==2.2.0 torchmetrics==0.7.0 lightning==2.2 numpy==1.24.3 pandas==2.3.3 pillow==12.0.0 openpyxl
+pip install h5py==3.15.1
 pip install tensorboard tqdm
 pip install scikit-learn albumentations
 pip install litserve
@@ -26,3 +27,7 @@ pip install opencv-python==4.8.1.78
 pip uninstall opencv-python-headless
 pip install numpy==1.24.3
 pip install matplotlib
+pip install -U ultralytics
+pip install hydra-core==1.3.2
+pip install omegaconf==2.3.0
+pip install timm==0.4.5
