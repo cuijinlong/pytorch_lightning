@@ -1,0 +1,38 @@
+# trainer/lhgnn/configs/train.yaml
+
+# @package _global_
+# specify here default configuration
+# order of defaults determines the order in which configs override each other
+defaults:
+  - _self_
+  - data: spoken
+  - model: LHGNN
+  - callbacks: default
+  - logger: tensorboard # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
+  - trainer: default
+  - paths: default
+  - extras: default
+  - hydra: default
+  # experiment configs allow for version control of specific hyperparameters
+  # e.g. best hyperparameters for given model and datamodule
+  - experiment: null
+  # config for hyperparameter optimization
+
+# task name, determines output directory path
+task_name: "train-spoken"
+pretrained: None # img, audioset or None
+# tags to help you identify your experiments
+# you can overwrite this in experiment configs
+# overwrite from command line with `python train.py tags="[first_tag, second_tag]"`
+tags: ["dev"]
+# set False to skip model training
+train: False
+# evaluate on test set, using best model weights achieved during training
+# lightning chooses best weights based on the metric specified in checkpoint callback
+eval: True
+wa: False # Weighted Average
+# simply provide checkpoint path to resume training
+pretrain_path:
+ckpt_path: /opt/pytorch_lightning/lightning_logs/train-spoken/runs/2025-11-28_17-49-31/checkpoints/last.ckpt
+# seed for random number generators in pytorch, numpy and python.random
+seed: null

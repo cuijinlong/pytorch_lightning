@@ -1,29 +1,30 @@
 # trainer/lhgnn/models/tagging_module.py
 from typing import Any, Dict, Tuple
-import numpy as np 
+import numpy as np
 import torch
 from pytorch_lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
-from torchmetrics.classification.accuracy import Accuracy
+from torchmetrics.classification import Accuracy, Precision, Recall, F1Score
 from trainer.lhgnn.models.utils.stats import calculate_stats
 import torch.distributed as dist
-from timm.scheduler import CosineLRScheduler,StepLRScheduler
+from timm.scheduler import CosineLRScheduler, StepLRScheduler
 from torchmetrics import AveragePrecision
-import logging 
+import logging
+
 
 class TaggingModule(LightningModule):
 
     def __init__(
-        self,
-        net: torch.nn.Module,
-        optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler,
-        compile: bool,
-        loss:str,
-        opt_warmup:bool,
-        learning_rate:float,
-        lr_rate:list,
-        lr_scheduler_epoch:list,
+            self,
+            net: torch.nn.Module,
+            optimizer: torch.optim.Optimizer,
+            scheduler: torch.optim.lr_scheduler,
+            compile: bool,
+            loss: str,
+            opt_warmup: bool,
+            learning_rate: float,
+            lr_rate: list,
+            lr_scheduler_epoch: list,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -35,222 +36,262 @@ class TaggingModule(LightningModule):
         self.loss = loss
         self.lr_scheduler_epoch = lr_scheduler_epoch
         self.lr_rate = lr_rate
+
+        # 损失函数
         if self.loss == 'bce':
             self.criterion = torch.nn.BCELoss()
         elif self.loss == 'cross_entropy':
             self.criterion = torch.nn.CrossEntropyLoss()
         elif self.loss == 'bcelogit':
             self.criterion = torch.nn.BCEWithLogitsLoss()
-        #self.ap = AveragePrecision(num_classes=200, on_step=False, on_epoch=True, dist_sync_on_step=True,task='multilabel',num_labels=200)
-        # for averaging loss across batches
+
+        # 损失指标
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
         self.test_loss = MeanMetric()
-        self.val_mAP = MeanMetric()
-        self.test_mAP = MeanMetric()
-        # for tracking best so far validation accuracy
+
+        # 最佳指标跟踪
         self.val_mAP_best = MaxMetric()
+
+        # 预测和目标存储
         self.val_predictions = []
         self.val_targets = []
         self.test_predictions = []
         self.test_targets = []
-        self.milestones = [10,15,20,25,30,35,40]
-        self.ap = AveragePrecision(num_classes=10, average='macro')
-        self.ap_test = AveragePrecision(num_classes=10, average='macro')
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Perform a forward pass through the model `self.net`.
 
-        :param x: A tensor of images.
-        :return: A tensor of logits.
-        """
+        # 类别数和任务类型
+        num_classes = 10  # 根据你的数据集调整
+
+        # 根据损失函数确定任务类型
+        if self.loss in ['bce', 'bcelogit']:
+            task_type = 'multilabel'
+            # 对于多标签分类，目标应该是0或1
+            self._convert_targets = lambda x: x.long() if x.dtype != torch.long else x
+        else:  # cross_entropy
+            task_type = 'multiclass'
+            # 对于多分类，目标应该是类别索引
+            self._convert_targets = lambda x: x.long() if x.dtype != torch.long else x
+
+        # mAP 指标
+        self.ap = AveragePrecision(num_classes=num_classes, average='macro')
+        self.ap_test = AveragePrecision(num_classes=num_classes, average='macro')
+
+        # 训练指标
+        self.train_accuracy = Accuracy(num_classes=num_classes, average='macro')
+        self.train_precision = Precision(num_classes=num_classes, average='macro')
+        self.train_recall = Recall(num_classes=num_classes, average='macro')
+        self.train_f1 = F1Score(num_classes=num_classes, average='macro')
+
+        # 验证指标
+        self.val_accuracy = Accuracy(num_classes=num_classes, average='macro')
+        self.val_precision = Precision(num_classes=num_classes, average='macro')
+        self.val_recall = Recall(num_classes=num_classes, average='macro')
+        self.val_f1 = F1Score(num_classes=num_classes, average='macro')
+
+        # 测试指标
+        self.test_accuracy = Accuracy(num_classes=num_classes, average='macro')
+        self.test_precision = Precision(num_classes=num_classes, average='macro')
+        self.test_recall = Recall(num_classes=num_classes, average='macro')
+        self.test_f1 = F1Score(num_classes=num_classes, average='macro')
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Perform a forward pass through the model `self.net`."""
         return self.net(x)
-    
+
     def on_train_start(self) -> None:
         """Lightning hook that is called when training begins."""
-        # by default lightning executes validation step sanity checks before training starts,
-        # so it's worth to make sure validation metrics don't store results from these checks
         self.val_loss.reset()
-        self.val_mAP.reset()
-        self.test_mAP.reset()
+        self.val_accuracy.reset()
+        self.val_precision.reset()
+        self.val_recall.reset()
+        self.val_f1.reset()
         self.val_mAP_best.reset()
-    
+
     def model_step(
-        self, batch: Tuple[torch.Tensor, torch.Tensor]
+            self, batch: Tuple[torch.Tensor, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Perform a single model step on a batch of data.
-
-        :param batch: A batch of data (a tuple) containing the input tensor of images and target labels.
-
-        :return: A tuple containing (in order):
-            - A tensor of losses.
-            - A tensor of predictions.
-            - A tensor of target labels.
-        """
+        """Perform a single model step on a batch of data."""
         x, y = batch
-        
         preds = self.forward(x)
-        epsilon = 1e-7
-        #preds = torch.clamp(preds, epsilon, 1. - epsilon)
-        
         loss = self.criterion(preds, y)
-        
         return loss, preds, y
-    
+
     def on_train_batch_start(self, batch, batch_idx):
         global_step = self.trainer.global_step
         optimizer = self.optimizers()
         if global_step <= 1000 and global_step % 50 == 0:
-            warm_lr = (global_step / 1000) * self.hparams.optimizer.keywords['lr']  # Assuming initial_lr is defined in hparams
-            
+            warm_lr = (global_step / 1000) * self.hparams.optimizer.keywords['lr']
             for param_group in optimizer.param_groups:
                 param_group['lr'] = warm_lr
             self.log('lr', warm_lr, on_step=True, on_epoch=False, logger=True)
         current_lr = next(iter(optimizer.param_groups))['lr']
         self.log('cur-lr', current_lr, on_step=False, on_epoch=True, logger=True)
-    
-    def training_step(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
-    ) -> torch.Tensor:
-        """Perform a single training step on a batch of data from the training set.
 
-        :param batch: A batch of data (a tuple) containing the input tensor of images and target
-            labels.
-        :param batch_idx: The index of the current batch.
-        :return: A tensor of losses between model predictions and targets.
-        """
+    def training_step(
+            self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+    ) -> torch.Tensor:
+        """Perform a single training step on a batch of data from the training set."""
         if batch_idx == 0:
             print(f'hyperparameters: {self.hparams}')
 
-        # batch形状：[8, 1, 1024, 128]
         loss, preds, y = self.model_step(batch)
+
+        # 转换目标为整数类型
+        targets_int = self._convert_targets(y)
+
+        # 更新训练指标
         self.train_loss(loss)
-        self.log("train/loss", self.train_loss, on_step=True, on_epoch=True, prog_bar=True,sync_dist=True)
+        self.train_accuracy(preds, targets_int)
+        self.train_precision(preds, targets_int)
+        self.train_recall(preds, targets_int)
+        self.train_f1(preds, targets_int)
+
+        # 记录训练指标
+        self.log("train/loss", self.train_loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("train/accuracy", self.train_accuracy, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("train/precision", self.train_precision, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("train/recall", self.train_recall, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("train/f1", self.train_f1, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
+
         return loss
-    
+
     def on_train_epoch_end(self) -> None:
-        "Lightning hook that is called when a training epoch ends."
+        """Lightning hook that is called when a training epoch ends."""
         pass
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
-        """Perform a single validation step on a batch of data from the validation set.
-
-        :param batch: A batch of data (a tuple) containing the input tensor of images and target
-            labels.
-        :param batch_idx: The index of the current batch.
-        """
+        """Perform a single validation step on a batch of data from the validation set."""
         loss, preds, targets = self.model_step(batch)
-        
-        target_cpu = targets
-        preds_cpu = preds
 
-        self.val_predictions.append(preds_cpu)
-        self.val_targets.append(target_cpu)
-        self.ap.update(preds_cpu, target_cpu.long())
-        # update and log metrics
+        # 转换目标为整数类型
+        targets_int = self._convert_targets(targets)
+
+        # 更新验证指标
         self.val_loss(loss)
-        #self.val_mAP(stats['AP'])
-        self.log("val/loss", self.val_loss, on_step=False, on_epoch=True, prog_bar=True,sync_dist=True)
-        #self.log("val/mAP-metric", map, on_step=True, on_epoch=True, prog_bar=True)
-    
-    def on_validation_epoch_end(self)->None:
-        "Lightning hook that is called when a validation epoch ends."
-       
-        val_preds = torch.cat(self.val_predictions, dim=0)
-        val_targets = torch.cat(self.val_targets, dim=0)
-        
-        #stats = calculate_stats(val_preds.cpu().detach().numpy(), val_targets.cpu().detach().numpy())
-        #mAP = np.mean([stat['AP'] for stat in stats])
-        #acc = stats[0]['acc']
-        #self.val_mAP_best(mAP)
-        
-        #avg_pres = self.ap.compute()
-        #print(avg_pres.shape)
-        #self.log("val/mAP", mAP, on_step=False, on_epoch=True, prog_bar=True,sync_dist=True)
-        self.log("val/mAP",self.ap.compute().mean(),on_step=False, on_epoch=True, prog_bar=True,sync_dist=True)
+        self.val_accuracy(preds, targets_int)
+        self.val_precision(preds, targets_int)
+        self.val_recall(preds, targets_int)
+        self.val_f1(preds, targets_int)
+        self.ap.update(preds, targets_int)
+
+        # 存储预测和目标（用于后续计算）
+        self.val_predictions.append(preds)
+        self.val_targets.append(targets)
+
+        # 记录验证损失
+        self.log("val/loss", self.val_loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+
+    def on_validation_epoch_end(self) -> None:
+        """Lightning hook that is called when a validation epoch ends."""
+        # 记录所有验证指标
+        self.log("val/accuracy", self.val_accuracy.compute(), on_step=False, on_epoch=True, prog_bar=True,
+                 sync_dist=True)
+        self.log("val/precision", self.val_precision.compute(), on_step=False, on_epoch=True, prog_bar=True,
+                 sync_dist=True)
+        self.log("val/recall", self.val_recall.compute(), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("val/f1", self.val_f1.compute(), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("val/mAP", self.ap.compute().mean(), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+
+        # 更新最佳mAP
+        current_mAP = self.ap.compute().mean()
+        self.val_mAP_best(current_mAP)
+        self.log("val/mAP_best", self.val_mAP_best.compute(), on_step=False, on_epoch=True, prog_bar=True,
+                 sync_dist=True)
+
+        # 重置指标
+        self.val_accuracy.reset()
+        self.val_precision.reset()
+        self.val_recall.reset()
+        self.val_f1.reset()
+        self.ap.reset()
+
+        # 清空列表
         self.val_predictions.clear()
         self.val_targets.clear()
-        self.ap.reset()
-        
+
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
+        """Perform a single test step on a batch of data from the test set."""
+        loss, preds, targets = self.model_step(batch)
 
-        loss,preds,targets = self.model_step(batch)
-        preds_cpu = preds
-        target_cpu = targets
-        self.test_predictions.append(preds_cpu)
-        self.test_targets.append(target_cpu)
-        # update and log metrics
+        # 转换目标为整数类型
+        targets_int = self._convert_targets(targets)
 
+        # 更新测试指标
         self.test_loss(loss)
-        self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True,sync_dist=True)
-    
+        self.test_accuracy(preds, targets_int)
+        self.test_precision(preds, targets_int)
+        self.test_recall(preds, targets_int)
+        self.test_f1(preds, targets_int)
+        self.ap_test.update(preds, targets_int)
+
+        # 存储预测和目标用于后续计算
+        self.test_predictions.append(preds)
+        self.test_targets.append(targets)
+
+        # 记录测试损失
+        self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+
     def on_test_epoch_end(self) -> None:
-        "Lightning hook that is called when a test epoch ends."
+        """Lightning hook that is called when a test epoch ends."""
         test_preds = torch.cat(self.test_predictions, dim=0)
         test_targets = torch.cat(self.test_targets, dim=0)
-        metric_dict = {'mAP': 0.0, 'acc': 0.0}
-        if torch.cuda.device_count() > 1:
+
+        # 转换目标为整数类型（用于自定义计算）
+        test_targets_int = self._convert_targets(test_targets)
+
+        # 分布式训练处理
+        if torch.cuda.device_count() > 1 and dist.is_initialized():
             gather_pred = [torch.zeros_like(test_preds) for _ in range(dist.get_world_size())]
-            gather_target = [torch.zeros_like(test_targets) for _ in range(dist.get_world_size())]
+            gather_target = [torch.zeros_like(test_targets_int) for _ in range(dist.get_world_size())]
             dist.barrier()
             dist.all_gather(gather_pred, test_preds)
-            dist.all_gather(gather_target, test_targets)
+            dist.all_gather(gather_target, test_targets_int)
 
             if dist.get_rank() == 0:
                 gather_pred = torch.cat(gather_pred, dim=0).cpu().detach().numpy()
                 gather_target = torch.cat(gather_target, dim=0).cpu().detach().numpy()
                 stats = calculate_stats(gather_pred, gather_target)
                 mAP = np.mean([stat['AP'] for stat in stats])
-                metric_dict['mAP'] = mAP
-                
+
                 logging.info(f'logging on rank {dist.get_rank()}')
                 logging.info(f'test_mAP: {mAP}')
-                self.log("test/mAP", mAP * float(dist.get_world_size()), on_step=False, on_epoch=True, prog_bar=True,sync_dist=True)
+                self.log("test/mAP_custom", mAP, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         else:
-            stats = calculate_stats(test_preds.cpu().detach().numpy(), test_targets.cpu().detach().numpy())
+            # 单GPU情况
+            stats = calculate_stats(test_preds.cpu().detach().numpy(), test_targets_int.cpu().detach().numpy())
             mAP = np.mean([stat['AP'] for stat in stats])
-            acc = stats[0]['acc']
-            self.log("test/mAP", mAP, on_step=False, on_epoch=True, prog_bar=True,sync_dist=True)
-        
-        #return {'test_mAP': mAP}
-      
-        
-    def setup(self, stage:str) -> None:
-        """Lightning hook that is called at the beginning of fit (train + validate), validate,
-        test, or predict.
+            self.log("test/mAP_custom", mAP, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
 
-        This is a good hook when you need to build models dynamically or adjust something about
-        them. This hook is called on every process when using DDP.
+        # 记录所有测试指标（使用torchmetrics计算的）
+        self.log("test/accuracy", self.test_accuracy.compute(), on_step=False, on_epoch=True, prog_bar=True,
+                 sync_dist=True)
+        self.log("test/precision", self.test_precision.compute(), on_step=False, on_epoch=True, prog_bar=True,
+                 sync_dist=True)
+        self.log("test/recall", self.test_recall.compute(), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("test/f1", self.test_f1.compute(), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("test/mAP", self.ap_test.compute().mean(), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
 
-        :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
-        """
+        # 重置指标
+        self.test_accuracy.reset()
+        self.test_precision.reset()
+        self.test_recall.reset()
+        self.test_f1.reset()
+        self.ap_test.reset()
+
+        # 清空列表
+        self.test_predictions.clear()
+        self.test_targets.clear()
+
+    def setup(self, stage: str) -> None:
+        """Lightning hook that is called at the beginning of fit, validate, test, or predict."""
         if self.hparams.compile and stage == "fit":
             self.net = torch.compile(self.net)
-    
-    # def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure):
-    # # manually warm up lr without a scheduler
-    #     if self.trainer.global_step < 1000:
-    #         lr_scale = min(1.0, float(self.trainer.global_step + 1) / 1000.0)
-    #         for pg in optimizer.param_groups:
-    #             pg["lr"] = lr_scale * self.hparams.optimizer.keywords['lr']
 
-    # # update params
-    #     optimizer.step(closure=optimizer_closure)
-        
     def configure_optimizers(self) -> Dict[str, Any]:
-    #     """Choose what optimizers and learning-rate schedulers to use in your optimization.
-    #     Normally you'd need one. But in the case of GANs or similar you might have multiple.
-
-    #     Examples:
-    #         https://lightning.ai/docs/pytorch/latest/common/lightning_module.html#configure-optimizers
-
-    #     :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
-    #     """
-        
+        """Choose what optimizers and learning-rate schedulers to use in your optimization."""
         optimizer = self.hparams.optimizer(params=self.trainer.model.parameters())
         if self.hparams.scheduler is not None:
             scheduler = self.hparams.scheduler(optimizer=optimizer)
-            #scheduler = CosineLRScheduler(optimizer,t_initial=50, warmup_t=1, warmup_lr_init=1e-6)
             return {
                 "optimizer": optimizer,
                 "lr_scheduler": {
