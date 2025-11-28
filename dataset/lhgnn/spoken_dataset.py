@@ -29,8 +29,8 @@ class SpokenDataset(Dataset):
         self.sr = audio_conf['sr']
         self.window_type = audio_conf['window_type']
         self.target_len = audio_conf['target_len']
-        self.freqm = audio_conf['freqm']
-        self.timem = audio_conf['timem']
+        self.freqm = audio_conf['freqm'] # 宽度 = 128（Mel 频带）
+        self.timem = audio_conf['timem'] # 高度 = 1024（时间帧）
         self.norm_mean = audio_conf['norm_mean']
         self.norm_std = audio_conf['norm_std']
 
@@ -86,7 +86,7 @@ class SpokenDataset(Dataset):
             mix_waveform = mix_lambda * waveform1 + (1 - mix_lambda) * waveform2
             waveform = mix_waveform - mix_waveform.mean()
 
-        # 提取fbank特征
+        # 提取fbank特征 输出形状：[n_frames, num_mels] （例如： [900, 128]）
         fbank = torchaudio.compliance.kaldi.fbank(
             waveform,
             htk_compat=True,

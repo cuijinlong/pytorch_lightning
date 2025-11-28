@@ -7,19 +7,28 @@ data_dir: ${paths.data_dir}
 #label_csv_pth: ${paths.exp_dir}/AudioSet/datafiles/class_labels_indices.csv
 #samplr_csv_pth:
 #balance_samplr: False
-batch_size: 8 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
-num_workers: 1
+# DataLoader的batch形状：[8, 1, 1024, 128] （默认）
 pin_memory: True
 persistent_workers: True
+num_workers: 1
+# ------------------------- 数据集参数 -------------------------
+batch_size: 8 # 批次：fbank.shape = [8, 256(时间), 128(频率)]
+# target_len经验值：0.5 ~ 1 秒：128 / 256 、1 ~ 2 秒：256 / 512 、2 ~ 4 秒：512 / 1024  、 >4 秒：1024–2048
+target_len: 256 # target_len: 256 无论 wav 多长，最终都会调整到：[256, 128]、[高度, 宽度]、 [时间轴帧数, 频率特征数]
+# num_mels经验值：语音识别ASR：80 | 说话人识别：64 / 128 | 声纹、环境声分类：128 |大模型（AST、PANNs）：128 / 256
+num_mels: 128 # mel滤波器个数：这意味着每一帧 fbank 特征有 128 个频带值。
+# ------------------------- 音频增强参数（非常关键，对训练最重要） -------------------------
+mixup: 0.5 # Mixup 增强：50%的概率把两段音频做加权混合：
+# freqm经验值：num_mels 64、80、128     推荐freqm 8–32、10–40、15–60
+freqm: 48 # 频率掩蔽：最多会随机遮挡 128 个 mel 频带。类似图像里把一部分横条遮住。
+# timem经验值：target_len 256、512、1024     推荐timem 40–80、80–200、100–400
+timem: 256 # 时间掩蔽：最多会遮挡 整个时间轴（256） 的某一片段。
+# ------------------------- 采样率 & fbank 参数（这决定 kaldi fbank 的计算方式（属于行业标准）。） -----------------------------
 sr: 16000
 fmin: 20
 fmax: 8000
-num_mels: 128
 window_type: hanning
-target_len: 1024
-freqm: 128
-timem: 1024
-mixup: 0.5
+# ------------------------- 归一化 (fbank - (-4.5)) / 4.5 -----------------------------
 norm_mean: -4.5
 norm_std: 4.5
 #subset: 'full'

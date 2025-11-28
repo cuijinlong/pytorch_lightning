@@ -121,6 +121,8 @@ class TaggingModule(LightningModule):
         """
         if batch_idx == 0:
             print(f'hyperparameters: {self.hparams}')
+
+        # batch形状：[8, 1, 1024, 128]
         loss, preds, y = self.model_step(batch)
         self.train_loss(loss)
         self.log("train/loss", self.train_loss, on_step=True, on_epoch=True, prog_bar=True,sync_dist=True)

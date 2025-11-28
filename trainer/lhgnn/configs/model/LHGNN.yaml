@@ -20,7 +20,7 @@ scheduler:
  
 net:
   _target_: trainer.lhgnn.models.components.LHGNN.LHGNN
-  k: 25 
+  k: 10
   act: 'gelu'
   norm: 'batch'
   bias: True
@@ -32,7 +32,7 @@ net:
   num_class: 10
   emb_dims: 1024
   freq_num: 128
-  time_num: 1024
+  time_num: 256
   clusters: 10
   cluster_ratio: 0.4
   conv: 'lhg'

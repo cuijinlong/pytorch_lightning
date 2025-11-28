@@ -22,10 +22,10 @@ class SpokenDataModule(LightningDataModule):
                  fmin: int = 20,
                  fmax: int = 8000,
                  num_mels: int = 128,
-                 window_type: str = "hanning",
                  target_len: int = 1024,
-                 freqm: int = 128,
-                 timem: int = 1024,
+                 window_type: str = "hanning",
+                 freqm: int = 128, # 宽度 = 128（Mel 频带）
+                 timem: int = 1024, # 高度 = 1024（时间帧）
                  mixup: float = 0.5,
                  norm_mean: float = -4.5,
                  norm_std: float = 4.5,
