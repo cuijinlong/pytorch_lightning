@@ -8,7 +8,7 @@ defaults:
   - data: spoken
   - model: LHGNN
   - callbacks: default
-#  - logger: wandb # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
+  - logger: tensorboard # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
   - trainer: default
   - paths: default
   - extras: default
@@ -19,7 +19,7 @@ defaults:
   # config for hyperparameter optimization
 
 # task name, determines output directory path
-task_name: "train-audioset-new"
+task_name: "train-spoken"
 pretrained: None # img, audioset or None
 # tags to help you identify your experiments
 # you can overwrite this in experiment configs

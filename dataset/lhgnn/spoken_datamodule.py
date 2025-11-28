@@ -52,6 +52,7 @@ class SpokenDataModule(LightningDataModule):
         self.norm_std = norm_std
         self.num_devices = num_devices
         self.train_val_split = train_val_split
+        self._is_initialized = False
 
         self.audio_conf = {
             'sr': sr, 'fmin': fmin, 'fmax': fmax,
@@ -59,6 +60,12 @@ class SpokenDataModule(LightningDataModule):
             'target_len': target_len, 'freqm': freqm, 'timem': timem,
             'norm_mean': norm_mean, 'norm_std': norm_std, 'mixup': mixup
         }
+
+    def _ensure_initialized(self):
+        """确保数据加载器已经初始化"""
+        if not self._is_initialized:
+            self.setup()
+            self._is_initialized = True
 
     def setup(self, stage: Optional[str] = None) -> None:
         """创建训练、验证和测试数据集"""
@@ -111,8 +118,10 @@ class SpokenDataModule(LightningDataModule):
 
         # 获取类别数量
         self.num_classes = self.train_dataset.num_classes
+        self._is_initialized = True
 
     def train_dataloader(self) -> DataLoader[Any]:
+        self._ensure_initialized()
         return DataLoader(
             dataset=self.train_dataset,
             batch_size=self.batch_size,
@@ -123,6 +132,7 @@ class SpokenDataModule(LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader[Any]:
+        self._ensure_initialized()
         return DataLoader(
             dataset=self.val_dataset,
             batch_size=self.batch_size,
@@ -133,6 +143,7 @@ class SpokenDataModule(LightningDataModule):
         )
 
     def test_dataloader(self) -> DataLoader[Any]:
+        self._ensure_initialized()
         return DataLoader(
             dataset=self.test_dataset,
             batch_size=self.batch_size,

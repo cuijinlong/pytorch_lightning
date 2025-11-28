@@ -10,7 +10,7 @@ from pytorch_lightning.loggers import Logger
 from omegaconf import DictConfig
 import os
 import logging
-from trainer.lhgnn.models.utils.utils import load_weights
+# from trainer.lhgnn.models.utils.utils import load_weights
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True,cwd=False)
 os.environ['HYDRA_FULL_ERROR'] = '1'
@@ -46,19 +46,17 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")
     datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data)
 
-    datamodule.setup()
-
     log.info(f"Instantiating model <{cfg.model._target_}>")
 
     model: LightningModule = hydra.utils.instantiate(cfg.model)
 
-    pretrained = cfg.get('pretrained')
-
-    if pretrained in ['audioset', 'img']:
-        load_weights(model, cfg, pretrained)
-        log.info("Loading {} pretrained weights".format(pretrained))
-    else:
-        log.info(f"Training from scratch")
+    # pretrained = cfg.get('pretrained')
+    #
+    # if pretrained in ['audioset', 'img']:
+    #     load_weights(model, cfg, pretrained)
+    #     log.info("Loading {} pretrained weights".format(pretrained))
+    # else:
+    #     log.info(f"Training from scratch")
 
     log.info("Instantiating callbacks...")
     callbacks: List[Callback] = instantiate_callbacks(cfg.get("callbacks"))
@@ -77,6 +75,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         "callbacks": callbacks,
         "trainer": trainer,
     }
+
     if logger:
         log.info("Logging hyperparameters!")
         log_hyperparameters(object_dict)
