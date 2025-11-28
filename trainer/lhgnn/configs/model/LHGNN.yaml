@@ -29,9 +29,13 @@ net:
   epsilon: 0.2
   drop_path: 0.1
   size: 's'
+  # 分类数
   num_class: 10
+  # 小型模型 (参数少，计算资源有限)：512、 中型模型 (平衡性能与计算)：1024、大型模型 (追求最佳性能)：2048
   emb_dims: 1024
+  # 频域轴维度
   freq_num: 128
+  # 时间轴维度
   time_num: 256
   clusters: 10
   cluster_ratio: 0.4
