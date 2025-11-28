@@ -111,8 +111,6 @@ class TaggingModule(LightningModule):
         current_lr = next(iter(optimizer.param_groups))['lr']
         self.log('cur-lr', current_lr, on_step=False, on_epoch=True, logger=True)
     
-        
-
     def training_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
     ) -> torch.Tensor:
@@ -175,11 +173,6 @@ class TaggingModule(LightningModule):
         self.val_targets.clear()
         self.ap.reset()
         
-        
-        
-
-        
-
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
 
         loss,preds,targets = self.model_step(batch)
