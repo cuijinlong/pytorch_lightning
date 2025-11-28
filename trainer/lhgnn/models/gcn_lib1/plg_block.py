@@ -7,8 +7,7 @@ from .pos_embed import get_2d_relative_pos_embed
 import torch.nn.functional as F
 from timm.models.layers import DropPath
 import math
-from torch.nn import Sequential 
-from trainer.lhgnn.model.utils.model_utils import FFN
+from trainer.lhgnn.models.utils.model_utils import FFN
 
 class MRConv2d_plg(nn.Module):
     """
