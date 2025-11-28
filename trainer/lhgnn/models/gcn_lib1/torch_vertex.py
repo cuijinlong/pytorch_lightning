@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import nn
 from .torch_nn import BasicConv, batched_index_select, act_layer,FFN
-from .torch_edge import DenseDilatedKnnGraph,HyperedgeConstruction
+from .torch_edge import DenseDilatedKnnGraph, HyperedgeConstruction
 from .pos_embed import get_2d_relative_pos_embed
 import torch.nn.functional as F
 from timm.models.layers import DropPath

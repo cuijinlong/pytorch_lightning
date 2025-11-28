@@ -5,6 +5,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+""" 超边构建，用于更复杂的图结构 """
 class HyperedgeConstruction(nn.Module):
 
     def __init__(self,in_channels,num_iters=1):
@@ -170,7 +171,7 @@ class DenseDilated(nn.Module):
             edge_index = edge_index[:, :, :, ::self.dilation]
         return edge_index
 
-
+""" 使用k近邻和膨胀策略构建图结构 """
 class DenseDilatedKnnGraph(nn.Module):
     """
     Find the neighbors' indices based on dilated knn

@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from timm.models.layers import DropPath
 import math
 from trainer.lhgnn.models.utils.model_utils import FFN
-
+""" 最大相对图卷积，计算节点间的最大差值特征 """
 class MRConv2d_plg(nn.Module):
     """
     Max-Relative Graph Convolution (Paper: https://arxiv.org/abs/1904.03751) for dense data type
@@ -36,7 +36,7 @@ class MRConv2d_plg(nn.Module):
 
         return  self.nn_plg(lab_x)
 
-
+""" 边卷积，处理节点与其邻居的关系 """
 class EdgeConv2d(nn.Module):
     """
     Edge convolution layer (with activation, batch normalization) for dense data type
@@ -54,7 +54,7 @@ class EdgeConv2d(nn.Module):
         max_value, _ = torch.max(self.nn(torch.cat([x_i, x_j - x_i], dim=1)), -1, keepdim=True)
         return max_value
 
-
+""" 图采样聚合卷积 """
 class GraphSAGE(nn.Module):
     """
     GraphSAGE Graph Convolution (Paper: https://arxiv.org/abs/1706.02216) for dense data type
@@ -72,7 +72,7 @@ class GraphSAGE(nn.Module):
         x_j, _ = torch.max(self.nn1(x_j), -1, keepdim=True)
         return self.nn2(torch.cat([x, x_j], dim=1))
 
-
+""" 图同构网络卷积 """
 class GINConv2d(nn.Module):
     """
     GIN Graph Convolution (Paper: https://arxiv.org/abs/1810.00826) for dense data type
@@ -141,7 +141,7 @@ class GraphConv2d_plg(nn.Module):
     def forward(self, x, edge_index, y=None):
         return self.gconv_plg(x, edge_index, y)
 
-
+""" 动态图卷积，使用k近邻动态构建图结构 """
 class DyGraphConv2d(GraphConv2d_plg):
     """
     Dynamic graph convolution layer

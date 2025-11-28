@@ -5,6 +5,7 @@ from torch import nn
 from torch.nn import Sequential as Seq, Linear as Lin, Conv2d
 from timm.models.layers import DropPath
 
+""" 各种基础卷积、归一化、激活函数等 """
 ##############################
 #    Basic layers
 ##############################

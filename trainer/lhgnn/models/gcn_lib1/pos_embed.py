@@ -1,5 +1,6 @@
 import numpy as np
 
+""" 提供2D相对位置编码，增强空间信息 """
 # --------------------------------------------------------
 # relative position embedding
 # References: https://arxiv.org/abs/2009.13658
