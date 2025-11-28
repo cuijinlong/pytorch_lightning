@@ -198,7 +198,13 @@ class DyGraphConv2d(GraphConv2d):
         x = super(DyGraphConv2d, self).forward(x, edge_index, y,**kwargs)
         return x.reshape(B, -1, H, W).contiguous()
 
-
+"""
+结构为 fc1 -> graph_conv -> fc2 -> drop_path：
+fc1: 1×1 卷积把输入通道先映射到中间维度（例如 80→80，160→160 等），并做SyncBatchNorm。
+graph_conv：核心图卷积单元，类型为 DyGraphConv2d（动态图卷积）内部用 LHGConv2d（看起来是基于**超图/超边（Hypergraph）**的局部图卷积实现）。
+fc2: 再用 1×1 将 graph_conv 输出投回到原始通道数（例如 240→80）。
+drop_path: 有的 stage 使用 DropPath()（stochastic depth），有的使用 Identity()（不使用），用于正则和深度网络的训练稳定性。
+"""
 class Grapher(nn.Module):
     """
     Grapher module with graph convolution and fc layers
