@@ -24,7 +24,6 @@ class TaggingModule(LightningModule):
         learning_rate:float,
         lr_rate:list,
         lr_scheduler_epoch:list,
-        
     ) -> None:
         super().__init__()
         self.save_hyperparameters(logger=False)
@@ -42,7 +41,6 @@ class TaggingModule(LightningModule):
             self.criterion = torch.nn.CrossEntropyLoss()
         elif self.loss == 'bcelogit':
             self.criterion = torch.nn.BCEWithLogitsLoss()
-        
         #self.ap = AveragePrecision(num_classes=200, on_step=False, on_epoch=True, dist_sync_on_step=True,task='multilabel',num_labels=200)
         # for averaging loss across batches
         self.train_loss = MeanMetric()
@@ -123,8 +121,7 @@ class TaggingModule(LightningModule):
         """
         if batch_idx == 0:
             print(f'hyperparameters: {self.hparams}')
-        loss,preds,y = self.model_step(batch)
-        
+        loss, preds, y = self.model_step(batch)
         self.train_loss(loss)
         self.log("train/loss", self.train_loss, on_step=True, on_epoch=True, prog_bar=True,sync_dist=True)
         return loss

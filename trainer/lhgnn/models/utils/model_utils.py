@@ -74,34 +74,54 @@ class ConvFFN(nn.Module):
         x = self.drop_path(x) + shortcut
         return x
 
-
+"""
+ 初始特征提取器（作用是对输入数据进行初步的【下采样和特征提取】）
+ Stem模块 相当于 CNN"特征金字塔"，效果：快速下采样，提取低级特征（边缘、纹理等），为后续的图神经网络准备合适尺寸的输入特征
+ 在LHGNN中的具体数值：
+ （1）对于音频输入 [B, 128, 1024]:
+ （2）经过转置: [B, 1, 1024, 128]
+ （3）Stem_conv后: [B, 80, 256, 32] (分辨率变为1/4)
+"""
 class Stem_conv(nn.Module):
-
     def __init__(self,in_dim=1,out_dim=None,act='gelu'):
         super(Stem_conv,self).__init__()
-
-        self.convs = Seq(nn.Conv2d(in_dim,out_dim//2,3,stride=2,padding=1),
-                        nn.BatchNorm2d(out_dim//2),
-                        act_layer(act),
-                        nn.Conv2d(out_dim//2,out_dim,3,stride=2,padding=1),
+        self.convs = Seq(
+                        # 输入通道: in_dim (默认1，对应单通道频谱图)
+                        # 输出通道: out_dim//2 (输出维度的一半)
+                        # 卷积核: 3×3
+                        # 步长: 2(下采样2倍)
+                        # 填充: 1 (保持边界信息)
+                        nn.Conv2d(in_dim, out_dim//2,3, stride=2, padding=1), # 第一层
+                        nn.BatchNorm2d(out_dim//2), # 批归一化
+                        act_layer(act), # 激活函数
+                        # 输入通道: out_dim//2
+                        # 输出通道: out_dim(目标维度)
+                        # 步长: 2 (再次下采样2倍)
+                        # 效果: 空间分辨率再减半，通道数达到目标维度
+                        nn.Conv2d(out_dim//2, out_dim,3, stride=2, padding=1), # 第二层
+                        nn.BatchNorm2d(out_dim), # 批归一化
+                        act_layer(act), # 激活函数
+                        # 输入输出通道相同: out_dim
+                        # 步长: 1 (保持分辨率不变)
+                        # 效果: 在不改变分辨率的情况下进一步提取特征
+                        nn.Conv2d(out_dim,out_dim,3, stride=1, padding=1), #　第三层
                         nn.BatchNorm2d(out_dim),
-                        act_layer(act),
-                        nn.Conv2d(out_dim,out_dim,3,stride=1,padding=1),
-                        nn.BatchNorm2d(out_dim),
-                         )
+                        )
     
     def forward(self,x):
         x = self.convs(x)
         return x
 
 class DownSample(nn.Module):
-
-    def __init__(self,in_dim,out_dim=768,act='relu'):
+    def __init__(self, in_dim, out_dim=768, act='relu'):
         super(DownSample,self).__init__()
-        self.conv = Seq(nn.Conv2d(in_dim,out_dim,3,stride=2,padding=1),
+        self.conv = Seq(nn.Conv2d(in_dim,
+                                  out_dim,
+                                  3,
+                                  stride=2,
+                                  padding=1),
                         nn.BatchNorm2d(out_dim))
     
     def forward(self,x):
-
-        x = self.conv(x) 
+        x = self.conv(x)
         return x
