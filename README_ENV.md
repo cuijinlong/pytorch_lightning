@@ -31,3 +31,6 @@ pip install -U ultralytics
 pip install hydra-core==1.3.2
 pip install omegaconf==2.3.0
 pip install timm==0.4.5
+pip install rich==13.7.0
+pip install rootutils==1.0.7
+pip install hydra-colorlog==1.2.0

@@ -1,3 +1,4 @@
+# trainer/lhgnn/models/tagging_module.py
 from typing import Any, Dict, Tuple
 import numpy as np 
 import torch
@@ -26,9 +27,7 @@ class TaggingModule(LightningModule):
         
     ) -> None:
         super().__init__()
-
         self.save_hyperparameters(logger=False)
-        
         self.net = net
         self.optimizer = optimizer
         self.warmup = opt_warmup
@@ -58,8 +57,8 @@ class TaggingModule(LightningModule):
         self.test_predictions = []
         self.test_targets = []
         self.milestones = [10,15,20,25,30,35,40]
-        self.ap = AveragePrecision(task="multilabel", num_labels=527, average=None)
-        self.ap_test = AveragePrecision(task="multilabel", num_labels=527, average=None)
+        self.ap = AveragePrecision(num_classes=10, average='macro')
+        self.ap_test = AveragePrecision(num_classes=10, average='macro')
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Perform a forward pass through the model `self.net`.

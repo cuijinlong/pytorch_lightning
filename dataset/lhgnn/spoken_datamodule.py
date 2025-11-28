@@ -8,14 +8,14 @@ import json
 import os
 import glob
 from torch.utils.data.distributed import DistributedSampler
-from spoken_dataset import SpokenDataset
+from dataset.lhgnn.spoken_dataset import SpokenDataset
 
 class SpokenDataModule(LightningDataModule):
 
     def __init__(self,
                  data_dir: str = "/opt/datasets/spoken/optional/wav",
-                 batch_size: int = 32,
-                 num_workers: int = 4,
+                 batch_size: int = 8,
+                 num_workers: int = 1,
                  pin_memory: bool = True,
                  persistent_workers: bool = True,
                  sr: int = 16000,
@@ -24,8 +24,8 @@ class SpokenDataModule(LightningDataModule):
                  num_mels: int = 128,
                  window_type: str = "hanning",
                  target_len: int = 1024,
-                 freqm: int = 10,
-                 timem: int = 10,
+                 freqm: int = 128,
+                 timem: int = 1024,
                  mixup: float = 0.5,
                  norm_mean: float = -4.5,
                  norm_std: float = 4.5,
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     datamodule = SpokenDataModule(
         data_dir="/opt/datasets/spoken/optional/wav",
         batch_size=32,
-        num_workers=4
+        num_workers=1
     )
 
     # 设置数据

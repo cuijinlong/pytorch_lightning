@@ -1,0 +1,26 @@
+# trainer/lhgnn/configs/data/spoken.yaml
+# Description: Configuration file for FSD50K dataset
+_target_: dataset.lhgnn.spoken_datamodule.SpokenDataModule
+#json_path: ${paths.exp_dir}/AudioSet/datafiles/
+data_dir: ${paths.data_dir}
+#meta_path: ${paths.data_dir}/ground_truth
+#label_csv_pth: ${paths.exp_dir}/AudioSet/datafiles/class_labels_indices.csv
+#samplr_csv_pth:
+#balance_samplr: False
+batch_size: 8 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
+num_workers: 1
+pin_memory: True
+persistent_workers: True
+sr: 16000
+fmin: 20
+fmax: 8000
+num_mels: 128
+window_type: hanning
+target_len: 1024
+freqm: 128
+timem: 1024
+mixup: 0.5
+norm_mean: -4.5
+norm_std: 4.5
+#subset: 'full'
+#num_devices: ${trainer.devices}
