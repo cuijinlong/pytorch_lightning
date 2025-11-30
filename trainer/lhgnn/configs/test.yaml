@@ -1,0 +1,54 @@
+# configs/test.yaml
+
+# @package _global_
+defaults:
+  - _self_
+  - data: spoken
+  - model: LHGNN
+  - callbacks: default
+  - logger: tensorboard
+  - trainer: default
+  - paths: default
+  - extras: default
+  - hydra: default
+  - experiment: null
+
+# 任务名称
+task_name: "test-spoken"
+
+# 标签
+tags: ["test"]
+
+# 训练控制 - 设置为 false 确保不进行训练
+train: false
+
+# 测试相关配置
+eval: true
+test: true
+
+# 是否使用加权平均模型
+wa: false
+
+# 检查点路径（可选）
+ckpt_path: null
+# 示例: ckpt_path: "/data/scratch/acw572/runs/2024-04-13_14-38-01/checkpoints/last.ckpt"
+
+# 随机种子
+seed: 42
+
+# 预训练配置
+pretrained: null
+
+# 预训练路径
+pretrain_path: null
+
+
+
+# 基本测试（使用最佳检查点）
+# python test.py
+# 使用指定检查点测试
+# python test.py ckpt_path=/path/to/your/checkpoint.ckpt
+# 使用加权平均模型测试
+# python test.py wa=true
+# 覆盖数据配置
+# python test.py data=your_dataset
