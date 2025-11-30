@@ -141,7 +141,14 @@ class GraphConv2d_plg(nn.Module):
     def forward(self, x, edge_index, y=None):
         return self.gconv_plg(x, edge_index, y)
 
-""" 动态图卷积，使用k近邻动态构建图结构 """
+""" 动态图卷积，使用k近邻动态构建图结构 
+│  ├─ 子步骤1：特征节点化 → [Batch, C, N, 1]（N=H×W）  
+│  ├─ 子步骤2：KNN图构建（DenseDilatedKnnGraph）  
+│  │  ├─ 特征归一化（L2归一化）  
+│  │  ├─ 计算距离矩阵（成对欧氏距离）  
+│  │  ├─ 选k×dilation个候选邻居（如k=10，dilation=2→20个）  
+│  │  └─ 膨胀采样（每隔dilation选1个，最终保留k个）  
+"""
 class DyGraphConv2d(GraphConv2d_plg):
     """
     Dynamic graph convolution layer
@@ -154,23 +161,57 @@ class DyGraphConv2d(GraphConv2d_plg):
         self.r = r
         self.dilated_knn_graph =  DenseDilatedKnnGraph(kernel_size, dilation, stochastic, epsilon)
 
-    def forward(self, lab_x,patch_x, relative_pos=None):
+    def forward(self, lab_x, patch_x, relative_pos=None):
        # B, C, H, W = patch_x.shape
         B,C,H1,W1 = lab_x.shape
         #y = None
         
         #if self.r > 1:
          #   y = F.avg_pool2d(x, self.r, self.r)
-          #  y = y.reshape(B, C, -1, 1).contiguous()            
-        lab_x = lab_x.reshape(B, C, -1, 1).contiguous()
-        
-        patch_x = patch_x.reshape(B, C, -1, 1).contiguous()
-        
+          #  y = y.reshape(B, C, -1, 1).contiguous()
+        """
+        子步骤1：特征节点化
+        详细解释：
+            空间位置 → 图节点：将特征图中的每个像素位置 (h,w) 转换为图中的一个节点
+            特征维度：每个节点的特征向量长度为 C（通道数）
+            节点总数：N = H × W
+            示例：如果输入是 [8, 256, 14, 14]，节点化后为 [8, 256, 196, 1]，即196个节点
+        """
+
+        """
+            假设输入：
+            lab_x: [8, 256, 14, 14] (标签特征)
+            patch_x: [8, 256, 14, 14] (图像块特征)
+            
+            # lab_x 节点化
+            [B, 256, 14, 14] 
+                → reshape(B, 256, -1, 1) 
+                → [8, 256, 196, 1]  # N_lab = 14×14 = 196
+                
+            # patch_x 节点化  
+            [B, 256, 14, 14]
+                → reshape(B, 256, -1, 1)
+                → [8, 256, 196, 1]  # N_patch = 14×14 = 196
+        """
+        # 输入: [Batch, C, H, W] 的传统特征图
+        # 输出: [Batch, C, N, 1] 的图节点表示
+        lab_x = lab_x.reshape(B, C, -1, 1).contiguous() # → [B, C, N_lab, 1]
+        patch_x = patch_x.reshape(B, C, -1, 1).contiguous() # → [B, C, N_patch, 1]
+
+        """
+        子步骤2：KNN图构建
+            2.1 特征归一化（L2归一化）
+            2.2 计算距离矩阵
+            2.3 选择候选邻居
+            2.4 膨胀采样
+        """
+        # 构建图结构
         edge_index = self.dilated_knn_graph(lab_x, patch_x, relative_pos)
-        
+        # 图卷积计算
         x = super(DyGraphConv2d, self).forward(lab_x, edge_index, patch_x)
-        
+        # 恢复空间形状
         return x.reshape(B, -1, H1, W1).contiguous()
+
 def gen_adj_new(A):
     
     D = torch.pow(A.sum(1).float(), -0.5)
@@ -304,8 +345,10 @@ class Grapher_plg(nn.Module):
             nn.BatchNorm2d(in_channels),
         )
         #self.gcn = GCNResnet(num_classes=200, in_channel=256)
-        self.graph_conv = DyGraphConv2d(in_channels, in_channels*2, kernel_size, dilation, conv,
-                              act, norm, bias, stochastic, epsilon, r)
+        self.graph_conv = DyGraphConv2d(in_channels, in_channels*2,
+                                        kernel_size, dilation, conv,
+                                        act, norm, bias, stochastic,
+                                        epsilon, r)
         self.fc4 = nn.Sequential(
             nn.Conv2d(in_channels * 2, in_channels, 1, stride=1, padding=0),
             nn.BatchNorm2d(in_channels),
@@ -381,13 +424,15 @@ class Grapher_plg(nn.Module):
         #adj = adj.unsqueeze(0).repeat(B,1,1)
         B, C, H, W = x.shape
         relative_pos = self._get_relative_pos(self.relative_pos, H, W)
-        patch_x = x[:,:,200:,:]
+        patch_x = x[:,:,200:,:] # 保持 [B, C, H-200, W] 形状
         
-        lab_x = x[:,:,:200,:]
-        _tmp = lab_x
+        lab_x = x[:,:,:200,:] # 保持 [B, C, 200, W] 形状
+
+        _tmp = lab_x  # 保存原始lab_x
         
         #adj = self.adj.unsqueeze(0).repeat(B,1,1)
-        
+
+        # 🎯 直接调用 graph_conv，没有在Grapher_plg内部做节点化
         lab_x = self.graph_conv(lab_x,patch_x,relative_pos=None)
         #lab_x = self.fc4(lab_x)
         lab_x = self.drop_path(lab_x) + _tmp

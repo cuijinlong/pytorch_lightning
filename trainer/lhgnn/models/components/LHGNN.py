@@ -23,7 +23,10 @@ def init_layer(layer):
 
 def init_bn(bn):
     bn.weight.data.fill_(1.)
-
+"""
+    图卷积架构-调用链
+    LHGNN → torch_vertex.Grapher → DyGraphConv2d → GraphConv2d → LHGConv2d/MRConv2d
+"""
 class LHGNN(nn.Module):
     # trainer/lhgnn/models/tagging_module.py -> net
     # net -> trainer/lhgnn/configs/model/LHGNN.yaml
