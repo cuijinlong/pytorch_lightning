@@ -18,17 +18,17 @@ class SpokenDataModule(LightningDataModule):
                  num_workers: int = 1,
                  pin_memory: bool = True,
                  persistent_workers: bool = True,
-                 sr: int = 16000,
+                 sr: int = 8000,
                  fmin: int = 20,
                  fmax: int = 8000,
-                 num_mels: int = 128,
-                 target_len: int = 1024,
+                 num_mels: int = 64,
+                 target_len: int = 256,
                  window_type: str = "hanning",
-                 freqm: int = 128, # 宽度 = 128（Mel 频带）
-                 timem: int = 1024, # 高度 = 1024（时间帧）
+                 freqm: int = 32, # 宽度 = 32（Mel 频带）
+                 timem: int = 256, # 高度 = 256（时间帧）
                  mixup: float = 0.5,
-                 norm_mean: float = -4.5,
-                 norm_std: float = 4.5,
+                 norm_mean: float = 0.003,
+                 norm_std: float = 0.037,
                  num_devices: int = 1,
                  train_val_split: float = 0.8
                  ) -> None:

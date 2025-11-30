@@ -46,7 +46,7 @@ class LHGNN(nn.Module):
                  # --------------------------------------- 输入输出规格 ---------------------------------------------------------
                  num_class=10, # 作用: 类任务的类别数量，输出维度: [batch_size, num_class]
                  emb_dims=1024, # 作用: 最终嵌入维度（prediction层中间维度）
-                 freq_num=128, # 作用: 输入频谱图的频率轴大小
+                 freq_num=64, # 作用: 输入频谱图的频率轴大小
                  time_num=256, # 作用: 输入频谱图的时间轴大小
                  ):
         super(LHGNN,self).__init__()
@@ -179,7 +179,9 @@ class LHGNN(nn.Module):
     def model_init(self):
         for m in self.modules():
             if isinstance(m, torch.nn.Conv2d):
+                # 使用更稳定的初始化
                 torch.nn.init.kaiming_normal_(m.weight)
+                # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
                 m.weight.requires_grad = True
                 if m.bias is not None:
                     m.bias.data.zero_()

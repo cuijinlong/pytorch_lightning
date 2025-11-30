@@ -46,6 +46,9 @@ class SpokenDataset(Dataset):
             # 单音频处理
             waveform, sr = torchaudio.load(filename)
 
+            if waveform.shape[0] > 1:  # 多声道转单声道
+                waveform = waveform.mean(dim=0, keepdim=True)
+
             # 重采样
             if sr != self.sr:
                 transform = torchaudio.transforms.Resample(sr, self.sr)

@@ -16,7 +16,7 @@ class HyperedgeConstruction(nn.Module):
         self.num_iter = num_iters
         
     
-    def forward(self,x,num_centroids):
+    def forward(self, x, num_centroids):
         """
         实现模糊C均值(FCM)聚类算法
         Inputs:
@@ -106,10 +106,10 @@ def dense_knn_matrix(x, k=16, relative_pos=None):
     with torch.no_grad():
         x = x.transpose(2, 1).squeeze(-1)
         batch_size, n_points, n_dims = x.shape
-        ### memory efficient implementation ###
-        n_part = 10000
-        if n_points > n_part:
+        # 内存效率优化：使用分块计算避免大矩阵
+        if n_points > 5000: # 降低阈值
             nn_idx_list = []
+            n_part = 5000 # 更小的分块
             groups = math.ceil(n_points / n_part)
             for i in range(groups):
                 start_idx = n_part * i
