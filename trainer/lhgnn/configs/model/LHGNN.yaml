@@ -20,14 +20,23 @@ scheduler:
  
 net:
   _target_: trainer.lhgnn.models.components.LHGNN.LHGNN
-  k: 10
+  # 激活函数类型（'relu' | 'gelu' | 'leakyrelu' | 'prelu'等）
   act: 'gelu'
+  # 归一化层类型，如'batch','instance'等。
   norm: 'batch'
+  # 是否在卷积层中使用偏置。
   bias: True
+  # 丢弃率，用于预测层中的Dropout。
   dropout: 0.0
+  # 选择K个最近邻：DenseDilatedKnnGraph.xy_dense_knn_matrix
+  k: 9
+  # 作用: 是否在图卷积中使用膨胀采样,效果: 增加感受野而不增加参数
   dilation: True
+  # 用于DenseDilatedKnnGraph中的随机性，控制随机选择邻居的概率
   epsilon: 0.2
+  # DropPath的丢弃率，用于随机深度。
   drop_path: 0.1
+  # 模型规模
   size: 's'
   # 分类数
   num_class: 10
@@ -37,8 +46,18 @@ net:
   freq_num: 128
   # 时间轴维度：0.5 ~ 1 秒：128 / 256 、1 ~ 2 秒：256 / 512 、2 ~ 4 秒：512 / 1024  、 >4 秒：1024–2048
   time_num: 256
+  # ------------------------------  模糊C均值(FCM)聚类算法 --------------------------------------------
+  # 传统K-means：硬分配，每个点属于一个簇,
+  # 🎯 模糊聚类：软分配，每个点以不同程度属于多个簇
+  # 1. 模糊聚类在LHGNN模型中的核心位置是：torch_edge.py 中的 HyperedgeConstruction 类
+  # 2. 被 LHGConv2d 和 MRConv2d 图卷积调用
+  # 3. 用于构建超图结构，增强模型的全局关系建模能力
+  # 4. 同时捕捉"局部细节"（通过KNN）和"全局结构"（通过模糊聚类）
+  # 超图聚类中心数量
   clusters: 10
+  # 从聚类中心选择的top-k比例
   cluster_ratio: 0.4
+  # 选择图卷积类型（'mr': Max-Relative图卷积 | 'lhg': 超图卷积（使用聚类中心） | 'edge': 边卷积 | 'sage': GraphSAGE卷积 | 'gin': 图同构网络卷积 ）
   conv: 'lhg'
   #k_dpc: 9
   #cluster_method: 'soft-kmeans'
