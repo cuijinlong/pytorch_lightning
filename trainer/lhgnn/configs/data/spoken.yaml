@@ -1,6 +1,6 @@
 # trainer/lhgnn/configs/data/spoken.yaml
 # Description: Configuration file for FSD50K dataset
-_target_: dataset.lhgnn.spoken_datamodule.SpokenDataModule
+_target_: trainer.lhgnn.dataset.spoken_datamodule.SpokenDataModule
 #json_path: ${paths.exp_dir}/AudioSet/datafiles/
 data_dir: ${paths.data_dir}
 #meta_path: ${paths.data_dir}/ground_truth

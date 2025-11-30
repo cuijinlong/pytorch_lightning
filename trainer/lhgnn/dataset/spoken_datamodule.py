@@ -1,4 +1,4 @@
-# dataset/lhgnn/spoken_datamodule.py
+# trainer/lhgnn/dataset/spoken_datamodule.py
 from typing import Any, Dict, Optional, Tuple
 import numpy as np
 import torch
@@ -8,7 +8,7 @@ import json
 import os
 import glob
 from torch.utils.data.distributed import DistributedSampler
-from dataset.lhgnn.spoken_dataset import SpokenDataset
+from trainer.lhgnn.dataset.spoken_dataset import SpokenDataset
 
 class SpokenDataModule(LightningDataModule):
 

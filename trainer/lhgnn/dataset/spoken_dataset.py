@@ -1,4 +1,4 @@
-# dataset/lhgnn/spoken_dataset.py
+# trainer/lhgnn/dataset/spoken_dataset.py
 import numpy as np
 import torch
 import torch.nn.functional as F
