@@ -25,7 +25,8 @@ def init_bn(bn):
     bn.weight.data.fill_(1.)
 
 class LHGNN(nn.Module):
-
+    # trainer/lhgnn/models/tagging_module.py -> net
+    # net -> trainer/lhgnn/configs/model/LHGNN.yaml
     def __init__(self,
                  # --------------------------------------- 模型规模大小 ---------------------------------------------------------
                  size='s',  # small、media、big
