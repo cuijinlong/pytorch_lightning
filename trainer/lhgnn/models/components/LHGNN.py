@@ -31,23 +31,23 @@ class LHGNN(nn.Module):
                  # --------------------------------------- 模型规模大小 ---------------------------------------------------------
                  size='s',  # small、media、big
                  # --------------------------------------- 图结构特性 ---------------------------------------------------------
-                 k=9, # 每个节点的邻居数量，控制图的稀疏程度，值越大感受野越大
+                 k=10, # 每个节点的邻居数量，控制图的稀疏程度，值越大感受野越大
                  conv='mr', # 选择图卷积类型（'mr': Max-Relative图卷积 | 'edge': 边卷积 | 'sage': GraphSAGE卷积 | 'gin': 图同构网络卷积 | 'lhg': 超图卷积（使用聚类中心））
-                 clusters=50,  # 作用: 超图卷积中的聚类中心数量，仅当 conv='lhg' 时生效
-                 cluster_ratio=0.5,  # 作用: 控制从聚类中心选择的top-k比例，top_clusters = ceil(k * cluster_ratio)
+                 clusters=10,  # 作用: 超图卷积中的聚类中心数量，仅当 conv='lhg' 时生效
+                 cluster_ratio=0.4,  # 作用: 控制从聚类中心选择的top-k比例，top_clusters = ceil(k * cluster_ratio)
                  epsilon=0.2, # 用于DenseDilatedKnnGraph中的随机性，控制随机选择邻居的概率
                  act='gelu', # 激活函数类型（'relu' | 'gelu' | 'leakyrelu' | 'prelu'等）
                  norm='batch', # 归一化层类型，如'batch','instance'等。
                  bias=True, # 是否在卷积层中使用偏置。
                  # --------------------------------------- 图结构特性 ---------------------------------------------------------
                  dropout=0.0, # 丢弃率，用于预测层中的Dropout。
-                 drop_path=0.3, # DropPath的丢弃率，用于随机深度。
+                 drop_path=0.1, # DropPath的丢弃率，用于随机深度。
                  dilation=True,# 作用: 是否在图卷积中使用膨胀采样,效果: 增加感受野而不增加参数
                  # --------------------------------------- 输入输出规格 ---------------------------------------------------------
-                 num_class=200, # 作用: 类任务的类别数量，输出维度: [batch_size, num_class]
+                 num_class=10, # 作用: 类任务的类别数量，输出维度: [batch_size, num_class]
                  emb_dims=1024, # 作用: 最终嵌入维度（prediction层中间维度）
                  freq_num=128, # 作用: 输入频谱图的频率轴大小
-                 time_num=1024, # 作用: 输入频谱图的时间轴大小
+                 time_num=256, # 作用: 输入频谱图的时间轴大小
                  ):
         super(LHGNN,self).__init__()
         if size == 's':
