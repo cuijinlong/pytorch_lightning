@@ -34,7 +34,7 @@ net:
   # 丢弃率，用于预测层中的Dropout。
   dropout: 0.1
   # 选择K个最近邻：DenseDilatedKnnGraph.xy_dense_knn_matrix
-  k: 9
+  k: 5
   # 作用: 是否在图卷积中使用膨胀采样,效果: 增加感受野而不增加参数
   dilation: True
   # 用于DenseDilatedKnnGraph中的随机性，控制随机选择邻居的概率
