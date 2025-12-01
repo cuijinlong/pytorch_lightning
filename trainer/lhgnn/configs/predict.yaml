@@ -1,0 +1,81 @@
+# configs/predict.yaml
+
+# @package _global_
+defaults:
+  - _self_
+  - data: spoken
+  - model: LHGNN
+  - paths: default
+  - hydra: default
+
+# 模型权重路径（必需）
+model_weights: "/opt/pytorch_lightning/lightning_logs/train-spoken/runs/2025-12-01_10-35-06/checkpoints/last.ckpt"
+
+# 服务配置
+service:
+  host: "0.0.0.0"
+  port: 5000
+  debug: true  # 调试模式，显示详细错误
+
+# 允许的文件类型
+allowed_extensions:
+  - "wav"
+  - "mp3"
+  - "flac"
+  - "ogg"
+  - "m4a"
+  - "aac"
+
+# 数据模块配置（覆盖训练配置）
+data:
+  _target_: trainer.lhgnn.dataset.spoken_datamodule.SpokenDataModule
+  data_dir: ${paths.data_dir}
+  batch_size: 1  # 预测时使用较小的batch size
+  num_workers: 1
+  pin_memory: false
+  # 确保与训练时相同的参数
+  sr: 8000
+  fmin: 20
+  fmax: 4000
+  num_mels: 64
+  target_len: 256
+  window_type: hanning
+  freqm: 0  # 预测时不使用数据增强
+  timem: 0  # 预测时不使用数据增强
+  mixup: 0.0  # 预测时不使用mixup
+  norm_mean: 0.003
+  norm_std: 0.037
+
+# 模型配置 - 使用完整的TaggingModule
+model:
+  _target_: trainer.lhgnn.models.tagging_module.TaggingModule
+  net:
+    _target_: trainer.lhgnn.models.components.LHGNN.LHGNN
+    num_classes: 10
+    size: 's'
+    emb_dims: 512
+    freq_num: 64
+    time_num: 256
+    act: 'gelu'
+    norm: 'batch'
+    bias: True
+    dropout: 0.1
+    k: 5
+    dilation: True
+    epsilon: 0.1
+    drop_path: 0.05
+    clusters: 32
+    cluster_ratio: 0.1
+    conv: 'lhg'
+  optimizer:
+    _target_: torch.optim.Adam
+    lr: 1e-3
+  compile: false
+  loss: 'bcelogit'
+  opt_warmup: true
+
+# 路径配置
+paths:
+  data_dir: "./data/predict"
+  output_dir: "./output/predict"
+  log_dir: "./logs/predict"
