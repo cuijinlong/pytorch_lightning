@@ -194,72 +194,76 @@ class LHGNN(nn.Module):
 
         """ 整体流程： 输入 → Stem卷积 → 位置编码 → 多阶段GNN Backbone → 全局池化 → 分类输出 """
 
-        """ 节点1：输入预处理(维度调整)
-            [Batch, Freq, Time] 原始音频频谱图
-            [Batch, 1, Time, Freq] 调整后的4D张量
-            关键技术点:
-                增加通道维度适配卷积网络
-                转置操作确保时间、频率轴正确对应卷积核
+        """ 
+            节点1：输入预处理(维度调整)
+                [Batch, Freq, Time] 原始音频频谱图
+                [Batch, 1, Time, Freq] 调整后的4D张量
+                关键技术点:
+                    增加通道维度适配卷积网络
+                    转置操作确保时间、频率轴正确对应卷积核
         """
         # 步骤1.1: 增加通道维度
         inputs = inputs.unsqueeze(1) # [Batch, Freq, Time] → [Batch, 1, Freq, Time]
         # 步骤1.2: 转置适配卷积操作
         inputs = inputs.transpose(2,3) # [Batch, 1, Freq, Time] → [Batch, 1, Time, Freq]
 
-        """ 节点2：Stem卷积特征提取(快速下采样)
-            位置: model_utils.py → Stem_conv 类
-            输入: [Batch, 1, Time, Freq] 预处理后的频谱图
-            输出: [Batch, 80, Time/4, Freq/4] 下采样特征图
-            关键技术点:
-                两次下采样: 空间分辨率降至1/4
-                通道扩展: 1→40→80通道
-                GELU激活: 更平滑的非线性变换
-            特征金字塔构建
-            Stem 卷积：作为模型的 “特征金字塔底层”，使用 1×1 卷积将输入通道
-                      从 1 映射到第一个 stage 的通道数（如 80），同时通过下采样将空间尺寸
-                      缩小为原来的 1/4（如 freq_num//4 * time_num//4），初步提取低频特征。
-            位置编码：通过可学习参数 pos_embed 为特征添加位置信息（形状与 Stem 输出一致），
-                    帮助模型感知时空位置关系，类似 Transformer 的位置编码。
-            输出: [Batch, C0, H/4, W/4] 分辨率: 1/4, 通道: 80
+        """ 
+            节点2：Stem卷积特征提取(快速下采样)
+                位置: model_utils.py → Stem_conv 类
+                输入: [Batch, 1, Time, Freq] 预处理后的频谱图
+                输出: [Batch, 80, Time/4, Freq/4] 下采样特征图
+                关键技术点:
+                    两次下采样: 空间分辨率降至1/4
+                    通道扩展: 1→40→80通道
+                    GELU激活: 更平滑的非线性变换
+                特征金字塔构建
+                Stem 卷积：作为模型的 “特征金字塔底层”，使用 1×1 卷积将输入通道
+                          从 1 映射到第一个 stage 的通道数（如 80），同时通过下采样将空间尺寸
+                          缩小为原来的 1/4（如 freq_num//4 * time_num//4），初步提取低频特征。
+                位置编码：通过可学习参数 pos_embed 为特征添加位置信息（形状与 Stem 输出一致），
+                        帮助模型感知时空位置关系，类似 Transformer 的位置编码。
+                输出: [Batch, C0, H/4, W/4] 分辨率: 1/4, 通道: 80
         """
         x = self.stem(inputs) + self.pos_embed
-        """ 节点3：位置编码融合(todo位置编码)
-            输入: 
-                Stem输出: [Batch, 80, H, W]
-                位置编码: [1, 80, H, W] (可学习参数)
-            输出: [Batch, 80, H, W] 带位置信息的特征图
-            关键技术点:
-                可学习位置编码: 类似Transformer的位置感知
-                逐元素相加: 简单有效的融合方式
+        """ 
+            节点3：位置编码融合(todo位置编码)
+                输入: 
+                    Stem输出: [Batch, 80, H, W]
+                    位置编码: [1, 80, H, W] (可学习参数)
+                输出: [Batch, 80, H, W] 带位置信息的特征图
+                关键技术点:
+                    可学习位置编码: 类似Transformer的位置感知
+                    逐元素相加: 简单有效的融合方式
         """
         # Batch, Chennel, Heigth, Width
         B, C, H, W = x.shape
 
-        """ 节点4：多阶段GNN Backbone
-            输入: [B,80,H,W]
-            输出: [B,640,H/32,W/32]
-            调用：节点5_Grapher + 节点8_ConvFF
-            > 每个stage包含：
-                > 下采样模块 (DownSample): 用于 stage 间过渡，将空间尺寸减半（HW//4），通道数加倍（如 80→160），减少计算量并扩大感受野。
-                > 多个Grapher+ConvFFN模块: 每个 stage 包含若干个 Grapher（图卷积单元）和 ConvFFN（前馈网络），是特征加工的核心。
-                
-            > 配置示例 (size='s'):
-               > blocks = [2, 2, 6, 2]          # 各stage的Grapher数量
-               > channels = [80, 160, 400, 640] # 各stage通道数,通道数逐步增加
-               > reduce_ratios = [4, 2, 1, 1]   # 各stage下采样率，下采样率逐渐减小
-               
-            Grapher 架构:
-                    输入 → FC1(1×1卷积) → 图卷积 → FC2(1×1卷积) → DropPath → 残差连接 → ConvFFN
-                数学表达:
-                    h₁ = FC1(x)
-                    h₂ = GraphConv(h₁, edge_index)  # 动态图卷积
-                    h₃ = FC2(h₂)
-                    h₄ = DropPath(h₃) + x          # 残差连接
-                    output = ConvFFN(h₄)           # 前馈网络
+        """ 
+            节点4：多阶段GNN Backbone
+                输入: [B,80,H,W]
+                输出: [B,640,H/32,W/32]
+                调用：节点5_Grapher + 节点8_ConvFF
+                > 每个stage包含：
+                    > 下采样模块 (DownSample): 用于 stage 间过渡，将空间尺寸减半（HW//4），通道数加倍（如 80→160），减少计算量并扩大感受野。
+                    > 多个Grapher+ConvFFN模块: 每个 stage 包含若干个 Grapher（图卷积单元）和 ConvFFN（前馈网络），是特征加工的核心。
                     
-            ConvFFN（前馈网络）位于每个 Grapher 之后，结构为 “1×1 卷积→激活→1×1 卷积”，作用是对图卷积输出的特征进行非线性变换，增强模型表达能力：
-                输入通道数 = 输出通道数（与当前 stage 通道一致）。
-                隐藏层通道数为输入的 4 倍（如 80→320→80），使用 gelu 等激活函数。
+                > 配置示例 (size='s'):
+                   > blocks = [2, 2, 6, 2]          # 各stage的Grapher数量
+                   > channels = [80, 160, 400, 640] # 各stage通道数,通道数逐步增加
+                   > reduce_ratios = [4, 2, 1, 1]   # 各stage下采样率，下采样率逐渐减小
+                   
+                Grapher 架构:
+                        输入 → FC1(1×1卷积) → 图卷积 → FC2(1×1卷积) → DropPath → 残差连接 → ConvFFN
+                    数学表达:
+                        h₁ = FC1(x)
+                        h₂ = GraphConv(h₁, edge_index)  # 动态图卷积
+                        h₃ = FC2(h₂)
+                        h₄ = DropPath(h₃) + x          # 残差连接
+                        output = ConvFFN(h₄)           # 前馈网络
+                        
+                ConvFFN（前馈网络）位于每个 Grapher 之后，结构为 “1×1 卷积→激活→1×1 卷积”，作用是对图卷积输出的特征进行非线性变换，增强模型表达能力：
+                    输入通道数 = 输出通道数（与当前 stage 通道一致）。
+                    隐藏层通道数为输入的 4 倍（如 80→320→80），使用 gelu 等激活函数。
         """
         for i in range(len(self.backbone)):
             x = self.backbone[i](x)
