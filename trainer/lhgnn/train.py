@@ -27,6 +27,7 @@ from trainer.lhgnn.models.utils import (
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
+
 @task_wrapper
 def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Trains the model. Can additionally evaluate on a testset, using best weights obtained during
@@ -47,8 +48,19 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data)
 
     log.info(f"Instantiating model <{cfg.model._target_}>")
-
     model: LightningModule = hydra.utils.instantiate(cfg.model)
+
+    # 加载预训练权重
+    if cfg.get("pretrain_path"):
+        log.info(f"Loading pretrained weights from: {cfg.pretrain_path}")
+        pretrain_checkpoint = torch.load(cfg.pretrain_path, map_location="cpu")
+
+        # 检查检查点格式并加载权重
+        if "state_dict" in pretrain_checkpoint:
+            model.load_state_dict(pretrain_checkpoint["state_dict"], strict=False)
+        else:
+            model.load_state_dict(pretrain_checkpoint, strict=False)
+        log.info("Pretrained weights loaded successfully")
 
     # pretrained = cfg.get('pretrained')
     #
@@ -82,7 +94,16 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     log.info("Starting training!")
 
-    trainer.fit(model=model, datamodule=datamodule)
+    # 使用检查点路径恢复训练（如果有）
+    ckpt_path = None
+    if cfg.get("ckpt_path"):
+        ckpt_path = cfg.ckpt_path
+        log.info(f"Resuming training from checkpoint: {ckpt_path}")
+
+    if ckpt_path:
+        trainer.fit(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
+    else:
+        trainer.fit(model=model, datamodule=datamodule)
 
     train_metrics = trainer.callback_metrics
     log.info(f"Training completed!")
@@ -90,16 +111,19 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     # Evaluate model on test set with best weights
 
     if cfg.get("eval"):
-        log.info("Evaluating  for single model!")
-        path = '/data/scratch/acw572/runs/2024-04-13_14-38-01/checkpoints/last.ckpt'
-        state_dict = torch.load(path)
+        log.info("Evaluating for single model!")
+
+        # 使用训练过程中保存的最佳检查点进行测试
         ckpt_path = trainer.checkpoint_callback.best_model_path
-        ckpt = torch.load(ckpt_path)
-        model.load_state_dict(state_dict, strict=True)
+        if ckpt_path and os.path.exists(ckpt_path):
+            log.info(f"Loading best model from: {ckpt_path}")
+            model = model.load_from_checkpoint(ckpt_path)
+        else:
+            log.warning("No best checkpoint found, using current model for evaluation")
 
         test_results = trainer.test(model=model, datamodule=datamodule)
-        # logging.info(f"Test results: {test_results['mAP']}")
-        # log.info(f"Test mAP: {test_results['mAP']}")
+        log.info(f"Test results: {test_results}")
+
     # Weighted Average Model
 
     if cfg.get("wa"):
@@ -134,7 +158,6 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     # return metric_dict, object_dict
     return metrics, object_dict
-
 
 @hydra.main(version_base="1.3", config_path="./configs", config_name="train.yaml")
 def main(cfg: DictConfig) -> Optional[float]:

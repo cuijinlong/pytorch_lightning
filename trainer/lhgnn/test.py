@@ -1,5 +1,5 @@
 # test.py
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 import hydra
 import lightning as L
 import torch
@@ -9,8 +9,9 @@ from pytorch_lightning.loggers import Logger
 from omegaconf import DictConfig
 import rootutils
 import os
+import numpy as np
 
-# 设置项目根目录 - 与 train.py 保持一致
+# 设置项目根目录
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True, cwd=False)
 os.environ['HYDRA_FULL_ERROR'] = '1'
 
@@ -26,12 +27,90 @@ from trainer.lhgnn.models.utils import (
 log = RankedLogger(__name__, rank_zero_only=True)
 
 
+def load_pretrained_weights(model: LightningModule, pretrain_path: str) -> None:
+    """加载预训练权重"""
+    log.info(f"Loading pretrained weights from: {pretrain_path}")
+
+    if not os.path.exists(pretrain_path):
+        log.error(f"Pretrain path does not exist: {pretrain_path}")
+        return
+
+    try:
+        checkpoint = torch.load(pretrain_path, map_location="cpu")
+
+        # 处理不同的检查点格式
+        if "state_dict" in checkpoint:
+            state_dict = checkpoint["state_dict"]
+        else:
+            state_dict = checkpoint
+
+        # 移除可能的模块前缀
+        new_state_dict = {}
+        for k, v in state_dict.items():
+            if k.startswith("model.") or k.startswith("module."):
+                new_state_dict[k.replace("model.", "").replace("module.", "")] = v
+            else:
+                new_state_dict[k] = v
+
+        # 加载权重，允许部分匹配
+        missing_keys, unexpected_keys = model.load_state_dict(new_state_dict, strict=False)
+
+        if missing_keys:
+            log.warning(f"Missing keys in pretrained weights: {missing_keys}")
+        if unexpected_keys:
+            log.warning(f"Unexpected keys in pretrained weights: {unexpected_keys}")
+
+        log.info("Pretrained weights loaded successfully")
+
+    except Exception as e:
+        log.error(f"Failed to load pretrained weights: {e}")
+
+
+def create_weighted_average_model(cfg: DictConfig, model: LightningModule, ckpt_dir: str) -> LightningModule:
+    """创建加权平均模型"""
+    log.info("Creating weighted average model")
+    model_ckpt = []
+
+    # 收集所有检查点
+    for ckpt_file in os.listdir(ckpt_dir):
+        if ckpt_file.endswith('.ckpt') and ckpt_file != 'wa.pth.tar':
+            ckpt_path = os.path.join(ckpt_dir, ckpt_file)
+            try:
+                checkpoint = torch.load(ckpt_path, map_location="cpu")
+                if "state_dict" in checkpoint:
+                    model_ckpt.append(checkpoint["state_dict"])
+                    log.info(f"Loaded checkpoint: {ckpt_file}")
+            except Exception as e:
+                log.warning(f"Failed to load checkpoint {ckpt_file}: {e}")
+
+    if not model_ckpt:
+        log.error("No valid checkpoints found for weighted average")
+        return model
+
+    # 重新实例化模型用于加权平均
+    model_wa: LightningModule = hydra.utils.instantiate(cfg.model)
+    own_state = model_wa.state_dict()
+
+    # 计算加权平均
+    log.info(f"Averaging {len(model_ckpt)} checkpoints")
+    for name, params in own_state.items():
+        if name in model_ckpt[0]:
+            own_state[name] = torch.zeros_like(params)
+            model_ckpt_key = torch.stack([d[name].float() for d in model_ckpt], dim=0)
+            own_state[name].copy_(torch.mean(model_ckpt_key, dim=0))
+
+    model_wa.load_state_dict(own_state)
+    log.info("Weighted average model created successfully")
+
+    return model_wa
+
+
 @task_wrapper
-def test(cfg: DictConfig) -> Dict[str, Any]:
+def test(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """专门用于模型测试的函数
 
     :param cfg: Hydra 配置对象
-    :return: 测试指标字典
+    :return: 测试指标字典和对象字典
     """
     # 设置随机种子
     if cfg.get("seed"):
@@ -44,6 +123,10 @@ def test(cfg: DictConfig) -> Dict[str, Any]:
     # 实例化模型
     log.info(f"Instantiating model <{cfg.model._target_}>")
     model: LightningModule = hydra.utils.instantiate(cfg.model)
+
+    # 加载预训练权重（如果提供）
+    if cfg.get("pretrain_path"):
+        load_pretrained_weights(model, cfg.pretrain_path)
 
     # 实例化回调函数
     log.info("Instantiating callbacks...")
@@ -81,28 +164,14 @@ def test(cfg: DictConfig) -> Dict[str, Any]:
     # 方式1：使用加权平均模型进行测试
     if cfg.get("wa"):
         log.info("Testing with weighted average model")
-        model_ckpt = []
+
+        # 获取检查点目录
         ckpt_dir = cfg.callbacks.model_checkpoint.dirpath
+        if not os.path.exists(ckpt_dir):
+            log.error(f"Checkpoint directory does not exist: {ckpt_dir}")
+            return {}, object_dict
 
-        # 重新实例化模型用于加权平均
-        model_wa: LightningModule = hydra.utils.instantiate(cfg.model)
-        own_state = model_wa.state_dict()
-
-        # 收集所有检查点
-        for ckpt_file in os.listdir(ckpt_dir):
-            if 'ckpt' in ckpt_file:
-                ckpt_path = os.path.join(ckpt_dir, ckpt_file)
-                model_ckpt.append(torch.load(ckpt_path)['state_dict'])
-
-        # 计算加权平均
-        for name, params in own_state.items():
-            own_state[name] = torch.zeros_like(params)
-            model_ckpt_key = torch.cat([d[name].float().unsqueeze(0) for d in model_ckpt], dim=0)
-            own_state[name].copy_(torch.mean(model_ckpt_key, dim=0))
-
-        model_wa.load_state_dict(own_state)
-
-        # 执行测试
+        model_wa = create_weighted_average_model(cfg, model, ckpt_dir)
         test_results = trainer.test(model=model_wa, datamodule=datamodule)
         log.info(f"Test results from weighted average model: {test_results}")
 
@@ -120,22 +189,13 @@ def test(cfg: DictConfig) -> Dict[str, Any]:
             log.info(f"Test results with specified checkpoint: {test_results}")
         else:
             log.error(f"Checkpoint path does not exist: {ckpt_path}")
+            return {}, object_dict
 
-    # 方式3：使用最佳检查点进行测试
-    elif hasattr(trainer, 'checkpoint_callback') and trainer.checkpoint_callback:
-        ckpt_path = trainer.checkpoint_callback.best_model_path
-        if ckpt_path and os.path.exists(ckpt_path):
-            log.info(f"Testing with best checkpoint: {ckpt_path}")
-            test_results = trainer.test(
-                model=model,
-                datamodule=datamodule,
-                ckpt_path=ckpt_path
-            )
-            log.info(f"Test results with best checkpoint: {test_results}")
-        else:
-            log.warning("No best checkpoint found, testing with current model weights")
-            test_results = trainer.test(model=model, datamodule=datamodule)
-            log.info(f"Test results with current weights: {test_results}")
+    # 方式3：使用预训练权重进行测试
+    elif cfg.get("pretrain_path"):
+        log.info("Testing with pretrained weights")
+        test_results = trainer.test(model=model, datamodule=datamodule)
+        log.info(f"Test results with pretrained weights: {test_results}")
 
     # 方式4：使用当前模型权重进行测试
     else:
@@ -144,7 +204,10 @@ def test(cfg: DictConfig) -> Dict[str, Any]:
         log.info(f"Test results with current weights: {test_results}")
 
     log.info("Testing completed!")
-    return test_results[0] if test_results and len(test_results) > 0 else {}
+
+    # 返回测试结果和对象字典
+    metric_dict = test_results[0] if test_results and len(test_results) > 0 else {}
+    return metric_dict, object_dict
 
 
 @hydra.main(version_base="1.3", config_path="./configs", config_name="test.yaml")
@@ -153,23 +216,28 @@ def main(cfg: DictConfig) -> None:
 
     :param cfg: Hydra 配置对象
     """
-    # 应用额外工具（与 train.py 保持一致）
+    # 应用额外工具
     extras(cfg)
 
     log.info("Starting model testing process")
 
     # 执行测试
-    test_results = test(cfg)
+    test_metrics, object_dict = test(cfg)
 
-    # 打印主要测试指标
-    if test_results:
+    # 打印测试结果
+    if test_metrics:
         log.info("=== Final Test Results ===")
-        for metric_name, metric_value in test_results.items():
-            log.info(f"{metric_name}: {metric_value:.4f}")
+        for metric_name, metric_value in test_metrics.items():
+            if isinstance(metric_value, (int, float, np.number)):
+                log.info(f"{metric_name}: {metric_value:.4f}")
+            else:
+                log.info(f"{metric_name}: {metric_value}")
 
-        # 特别关注 mAP 指标
-        if 'mAP' in test_results:
-            log.info(f"🎯 Test mAP: {test_results['mAP']:.4f}")
+        # 特别关注常见指标
+        for key in ['mAP', 'map', 'accuracy', 'Accuracy', 'loss', 'Loss']:
+            if key in test_metrics:
+                log.info(f"🎯 Test {key}: {test_metrics[key]:.4f}")
+                break
     else:
         log.warning("No test results obtained")
 

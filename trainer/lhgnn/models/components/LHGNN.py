@@ -47,7 +47,7 @@ class LHGNN(nn.Module):
                  drop_path=0.1, # DropPath的丢弃率，用于随机深度。
                  dilation=True,# 作用: 是否在图卷积中使用膨胀采样,效果: 增加感受野而不增加参数
                  # --------------------------------------- 输入输出规格 ---------------------------------------------------------
-                 num_class=10, # 作用: 类任务的类别数量，输出维度: [batch_size, num_class]
+                 num_classes=10, # 作用: 类任务的类别数量，输出维度: [batch_size, num_class]
                  emb_dims=1024, # 作用: 最终嵌入维度（prediction层中间维度）
                  freq_num=64, # 作用: 输入频谱图的频率轴大小
                  time_num=256, # 作用: 输入频谱图的时间轴大小
@@ -71,7 +71,7 @@ class LHGNN(nn.Module):
         self.norm = norm # 归一化层类型，如'batch','instance'等。
         self.bias = bias # 是否在卷积层中使用偏置。
         self.drop_path = drop_path # DropPath的丢弃率，用于随机深度。
-        self.num_class = num_class # 作用: 类任务的类别数量，输出维度: [batch_size, num_class]
+        self.num_classes = num_classes # 作用: 类任务的类别数量，输出维度: [batch_size, num_class]
         self.emb_dims = emb_dims # 作用: 最终嵌入维度（prediction层中间维度）
         self.freq_num = freq_num # 作用: 输入频谱图的频率轴大小
         self.time_num = time_num # 作用: 输入频谱图的时间轴大小
@@ -173,7 +173,7 @@ class LHGNN(nn.Module):
                               nn.Dropout(self.dropout),
                               # 最终分类
                               nn.Conv2d(1024,
-                                        self.num_class,
+                                        self.num_classes,
                                         1,
                                         bias=True))
         # 初始化模型权重
@@ -202,9 +202,9 @@ class LHGNN(nn.Module):
                     增加通道维度适配卷积网络
                     转置操作确保时间、频率轴正确对应卷积核
         """
-        # 步骤1.1: 增加通道维度
+        # 步骤1.1: 增加通道维度 shape：torch.Size([8, 256, 64])
         inputs = inputs.unsqueeze(1) # [Batch, Freq, Time] → [Batch, 1, Freq, Time]
-        # 步骤1.2: 转置适配卷积操作
+        # 步骤1.2: 转置适配卷积操作 shape：torch.Size([8, 1, 64, 256])
         inputs = inputs.transpose(2,3) # [Batch, 1, Freq, Time] → [Batch, 1, Time, Freq]
 
         """ 
@@ -224,7 +224,7 @@ class LHGNN(nn.Module):
                         帮助模型感知时空位置关系，类似 Transformer 的位置编码。
                 输出: [Batch, C0, H/4, W/4] 分辨率: 1/4, 通道: 80
         """
-        x = self.stem(inputs) + self.pos_embed
+        x = self.stem(inputs) + self.pos_embed # inputs：torch.Size([8, 1, 64, 256]) pos_embed：torch.Size([1, 80, 16, 64]) x：torch.Size([8, 80, 16, 64])
         """ 
             节点3：位置编码融合(todo位置编码)
                 输入: 
@@ -265,8 +265,8 @@ class LHGNN(nn.Module):
                     输入通道数 = 输出通道数（与当前 stage 通道一致）。
                     隐藏层通道数为输入的 4 倍（如 80→320→80），使用 gelu 等激活函数。
         """
-        for i in range(len(self.backbone)):
-            x = self.backbone[i](x)
+        for i in range(len(self.backbone)): # [2, 2, 6, 2]
+            x = self.backbone[i](x) # x: torch.Size([8, 80, 16, 64])
         """
             节点5：Grapher图卷积模块(动态图卷积)
                 位置: torch_vertex.py → Grapher 类
@@ -327,7 +327,7 @@ class LHGNN(nn.Module):
                 通道扩展: 640→1024增强表示能力
                 Dropout: 正则化防止过拟合
         """
-        x = self.prediction(x) # [B,640,1,1] → [B,num_class,1,1]
+        x = self.prediction(x) # [B,640,1,1] → [B,num_classes,1,1]
         #preds = torch.sigmoid(x)
-        preds = x.squeeze(-1).squeeze(-1) # [B,num_class,1,1] → [B,num_class]
+        preds = x.squeeze(-1).squeeze(-1) # [B,num_classes,1,1] → [B,num_classes]
         return preds

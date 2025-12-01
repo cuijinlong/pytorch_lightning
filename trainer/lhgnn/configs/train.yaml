@@ -32,7 +32,9 @@ train: True
 eval: False
 wa: False # Weighted Average 
 # simply provide checkpoint path to resume training
+# /opt/pytorch_lightning/lightning_logs/train-spoken/runs/2025-12-01_10-35-06/checkpoints/epoch_051.ckpt
 pretrain_path:
+# /opt/pytorch_lightning/lightning_logs/train-spoken/runs/2025-12-01_09-18-57/checkpoints/last.ckpt
 ckpt_path:
 # seed for random number generators in pytorch, numpy and python.random
 seed: null

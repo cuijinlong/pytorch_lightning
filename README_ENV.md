@@ -1,8 +1,12 @@
 一、在GPU服务器的宿主机配置端口映射
 netsh interface portproxy show all
 netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=2222
+netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=5000
 netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=2222 connectaddress=172.28.237.87 connectport=2222
+netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=5000 connectaddress=172.28.237.87 connectport=5000
 netsh advfirewall firewall add rule name=WSL2 dir=in action=allow protocol=TCP localport=2222
+netsh advfirewall firewall add rule name=WSL2 dir=in action=allow protocol=TCP localport=5000
+
 
 二、 在GPU服务器上创建Conda环境
 unset http_proxy && unset https_proxy && unset HTTP_PROXY && unset HTTPS_PROXY
@@ -34,3 +38,5 @@ pip install timm==0.4.5
 pip install rich==13.7.0
 pip install rootutils==1.0.7
 pip install hydra-colorlog==1.2.0
+pip install flask==2.3.3
+pip install librosa==0.10.1

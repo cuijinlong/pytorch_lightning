@@ -30,25 +30,50 @@ test: true
 wa: false
 
 # 检查点路径（可选）
-ckpt_path: null
-# 示例: ckpt_path: "/data/scratch/acw572/runs/2024-04-13_14-38-01/checkpoints/last.ckpt"
+ckpt_path: "/opt/pytorch_lightning/lightning_logs/train-spoken/runs/2025-12-01_10-35-06/checkpoints/last.ckpt"
+# 示例:
+# ckpt_path: "/path/to/checkpoint.ckpt"
+
+# 预训练权重路径（可选）
+pretrain_path: null
+# 示例:
+# pretrain_path: "/path/to/pretrained_weights.pth"
 
 # 随机种子
 seed: 42
 
-# 预训练配置
-pretrained: null
+# 训练器配置覆盖（针对测试优化）
+trainer:
+  _target_: pytorch_lightning.Trainer
+  max_epochs: 1  # 测试时只需要1个epoch
+  check_val_every_n_epoch: 1
+  log_every_n_steps: 50
+  accelerator: auto
+  devices: 1
+  num_nodes: 1
+  precision: 32-true
+  enable_progress_bar: true
+  enable_model_summary: true
+  deterministic: false
+  benchmark: true
 
-# 预训练路径
-pretrain_path: null
+# 回调函数配置（针对测试优化）
+callbacks:
+  model_checkpoint:
+    _target_: pytorch_lightning.callbacks.ModelCheckpoint
+    dirpath: ${paths.output_dir}/checkpoints
+    filename: "test-{epoch:02d}-{val_loss:.2f}"
+    monitor: "val_loss"
+    mode: "min"
+    save_last: true
+    save_top_k: 1
+    every_n_epochs: 1
+    save_weights_only: false
 
-
-
-# 基本测试（使用最佳检查点）
-# python test.py
-# 使用指定检查点测试
-# python test.py ckpt_path=/path/to/your/checkpoint.ckpt
-# 使用加权平均模型测试
-# python test.py wa=true
-# 覆盖数据配置
-# python test.py data=your_dataset
+# 日志配置
+logger:
+  _target_: pytorch_lightning.loggers.TensorBoardLogger
+  save_dir: ${paths.log_dir}
+  name: ${task_name}
+  version: "test"
+  default_hp_metric: false
