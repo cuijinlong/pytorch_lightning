@@ -1,0 +1,23 @@
+# @package _global_
+defaults:
+  - _self_
+  - data: mnist
+  - model: yolov11n-cls
+  - paths: default
+
+# 评估配置
+task: "classify"
+mode: "val"
+
+# 模型权重路径
+weights: ./runs/train/weights/best.pt
+
+# 评估参数
+batch_size: 32
+workers: 4
+device: "cuda"
+half: false  # 是否使用半精度
+save_json: false  # 是否保存JSON结果
+save_dir: ./runs/val
+name: "exp"  # 实验名称
+exist_ok: true  # 如果保存目录存在是否覆盖

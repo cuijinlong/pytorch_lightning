@@ -1,0 +1,31 @@
+# @package _global_
+defaults:
+  - _self_
+  - data: mnist
+  - model: yolov11n-cls
+  - paths: default
+
+# 预测配置
+task: "classify"
+mode: "predict"
+
+# 模型权重路径
+weights: ./runs/train/weights/best.pt
+
+# 预测参数
+source: ./data/mnist/test  # 预测数据源
+batch_size: 1
+workers: 2
+device: "cuda"
+show: false  # 是否显示预测结果
+save_txt: true  # 是否保存标签文件
+save_conf: true  # 是否保存置信度
+save_dir: ./runs/predict
+name: "predict"
+exist_ok: true
+
+# 服务配置（可选）
+service:
+  host: "0.0.0.0"
+  port: 5000
+  debug: true

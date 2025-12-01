@@ -21,15 +21,12 @@ conda activate pytorch_lightning
 3、点击 Create。
 
 四、安装依赖包
-pip install torch==2.2 torchvision==0.17.0 torchaudio==2.2.0 torchmetrics==0.7.0 lightning==2.2 numpy==1.24.3 pandas==2.3.3 pillow==12.0.0 openpyxl
+pip install torch==2.2 torchvision==0.17.0 torchaudio==2.2.0  lightning==2.2 numpy==1.24.3 pandas==2.3.3 pillow==12.0.0 openpyxl
 pip install h5py==3.15.1
 pip install tensorboard tqdm
 pip install scikit-learn albumentations
 pip install litserve
 pip install -U openai-whisper
-pip install opencv-python==4.8.1.78
-pip uninstall opencv-python-headless
-pip install numpy==1.24.3
 pip install matplotlib
 pip install -U ultralytics
 pip install hydra-core==1.3.2
@@ -40,3 +37,6 @@ pip install rootutils==1.0.7
 pip install hydra-colorlog==1.2.0
 pip install flask==2.3.3
 pip install librosa==0.10.1
+pip install numpy==1.24.4
+pip install torchmetrics==0.11.0
+pip install opencv-python-headless==4.9.0.80 albucore==0.0.24
