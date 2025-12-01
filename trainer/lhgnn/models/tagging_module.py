@@ -60,7 +60,7 @@ class TaggingModule(LightningModule):
         self.test_targets = []
 
         # 类别数和任务类型
-        num_classes = 10  # 根据你的数据集调整
+        num_classes = net.num_classes
 
         # 根据损失函数确定任务类型
         if self.loss in ['bce', 'bcelogit']:

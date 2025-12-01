@@ -34,7 +34,7 @@ net:
   # 丢弃率，用于预测层中的Dropout。
   dropout: 0.1
   # 选择K个最近邻：DenseDilatedKnnGraph.xy_dense_knn_matrix
-  k: 9
+  k: 5
   # 作用: 是否在图卷积中使用膨胀采样,效果: 增加感受野而不增加参数
   dilation: True
   # 用于DenseDilatedKnnGraph中的随机性，控制随机选择邻居的概率
@@ -42,7 +42,7 @@ net:
   # DropPath的丢弃率，用于随机深度。
   drop_path: 0.05
   # 分类数
-  num_class: 10
+  num_classes: 10
   # 模型规模
   size: 's'
   # 小型模型 (参数少，计算资源有限)：512、 中型模型 (平衡性能与计算)：1024、大型模型 (追求最佳性能)：2048

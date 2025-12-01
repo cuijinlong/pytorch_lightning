@@ -259,7 +259,8 @@ class DyGraphConv2d(GraphConv2d):
             膨胀KNN: 扩大感受野而不增加参数
             多尺度图: 通过下采样构建层次化图结构
     """
-    def forward(self, x, relative_pos=None,**kwargs):
+    def forward(self, x, relative_pos=None, **kwargs):
+        # kwargs:{ num_clusters: [32(LHGNN.yaml配置clusters数),..... sum(self.blocks)块数], top_clusters: math.ceil(num_knn(LHGNN.yaml.k) * cluster_ratio(LHGNN.yaml.cluster_ratio)) }
         B, C, H, W = x.shape
         # 步骤6.1: 下采样构建多尺度图
         y = None
@@ -271,15 +272,27 @@ class DyGraphConv2d(GraphConv2d):
         x = x.reshape(B, C, -1, 1).contiguous()
         """
             步骤6.3: KNN图构建
-            在DyGraphConv2d中动态计算KNN图
-                每层动态重建图结构
-                适应不同层次的特征分布
+            假设你在一个大型相亲交友活动中, 你需要帮每个人找到 k（LHGNN.yaml） 个最合适的朋友/伴侣，标准是：
+                长相要相似（特征相似）
+                住得要近（空间位置接近）
         """
-        edge_index = self.dilated_knn_graph(x, y, relative_pos)
+        edge_index = self.dilated_knn_graph(x = x, y = y, relative_pos = relative_pos) # x：[8, 80, 1024, 1] y: [8, 80, 64, 1] relative_pos: [1, 1024, 64]
         # 步骤6.4: 执行图卷积
-        x = super(DyGraphConv2d, self).forward(x, edge_index, y, **kwargs)
+        """
+            每个像素点叫上自己的k个好朋友，大家坐在一起开学习交流会，比较彼此的优缺点，吸收别人的长处，更新自己的知识储备，然后回到原来的位置继续工作
+            三特征融合：
+                1. 自身特征：原始特征
+                2. 邻居特征：局部对比差异  
+                3. 聚类特征：全局榜样指导
+            模糊聚类：软分配，每个节点属于多个聚类(C均值模糊聚类)
+            通道扩展：80→240→80（发散-收敛思维）
+        """
+        x = super(DyGraphConv2d, self).forward(x, edge_index, y, **kwargs) # GraphConv2d ->  LHGConv2d -> 三个特征融合
+        # 输入: [8, 80, 1024, 1]  # 80个特征，1024个像素 ->  拼接三份特征矩阵： 输出: [8, 240, 1024, 1]  # 80×3=240个特征 -> reshape恢复空间形状： 最终: [8, 240, 16, 64]   # 240个特征通道
         # 步骤6.5: 恢复空间格式
-        return x.reshape(B, -1, H, W).contiguous()
+        # 交流会结束，同学们带着新知识回到自己座位 [8, 240, 16, 64]
+        z = x.reshape(B, -1, H, W).contiguous()
+        return z
 
 """
 结构为 fc1 -> graph_conv -> fc2 -> drop_path：
@@ -327,18 +340,7 @@ class Grapher(nn.Module):
             nn.BatchNorm2d(in_channels),
         )
         """
-        动态图构建细节:
-            使用k近邻动态构建图结构
-            支持膨胀采样扩大感受野
-                > 邻居选择：通过 num_knn 控制每个节点的邻居数量（如 k=10），
-                          结合膨胀采样（dilation）扩大感受野（类似 CNN 的膨胀卷积）。
-                > 聚类机制：当使用超图卷积时，通过 num_clusters 设定聚类中心数量（如 10），
-                          cluster_ratio 控制从中心选择的 top-k 比例（如 0.4→top4），
-                          平衡局部与全局关系。
-            (1) 特征归一化
-            (2) KNN计算最近邻
-            (3) 膨胀采样选择有效邻居
-            (4) 执行图卷积操作
+            大型相亲交友活动执行过程
         """
         self.graph_conv = DyGraphConv2d(in_channels, in_channels * channel_mul,
                                         num_knn, dilation, conv,
@@ -354,19 +356,27 @@ class Grapher(nn.Module):
         # 从聚类中心选择的top-k数量
         self.top_clusters = math.ceil(num_knn * cluster_ratio)  # = ceil(10 × 0.4) = 4
         if relative_pos:
-            print('using relative_pos')
-            relative_pos_tensor = torch.from_numpy(np.float32(get_2d_relative_pos_embed(in_channels,
-                int(n**0.5)))).unsqueeze(0).unsqueeze(1)
-            relative_pos_tensor = F.interpolate(
-                    relative_pos_tensor, size=(n, n//(r*r)), mode='bicubic', align_corners=False)
-            self.relative_pos = nn.Parameter(-relative_pos_tensor.squeeze(1), requires_grad=False)
+            """
+                为2D网格上的每个位置生成一个唯一的编码向量
+                编码应该能够反映位置之间的空间关系
+                相近位置编码相似，远离位置编码差异大
+            """
+            # 1. 生成正弦-余弦绝对位置编码
+            pos_embed = get_2d_relative_pos_embed(embed_dim = in_channels, grid_size = int(n**0.5)) # [1024, 1024]
+            relative_pos_tensor = torch.from_numpy(np.float32(pos_embed)).unsqueeze(0).unsqueeze(1)
+
+            relative_pos_tensor = F.interpolate(relative_pos_tensor,
+                                                size=(n, n//(r*r)),
+                                                mode='bicubic',
+                                                align_corners=False)
+            self.relative_pos = nn.Parameter(-relative_pos_tensor.squeeze(1), requires_grad=False) # torch.Size()
 
     def _get_relative_pos(self, relative_pos, H, W):
-        if relative_pos is None or H * W == self.n:
+        if relative_pos is None or H * W == self.n: # 情况1：不需要位置编码，或尺寸匹配预设值
             return relative_pos
-        else:
-            N = H * W
-            N_reduced = N // (self.r * self.r)
+        else:  # 情况2：特征图尺寸变化，需要插值调整
+            N = H * W # 当前实际节点数
+            N_reduced = N // (self.r * self.r) # 下采样后的节点数
             return F.interpolate(relative_pos.unsqueeze(0), size=(N, N_reduced), mode="bicubic").squeeze(0)
 
     """
@@ -380,17 +390,25 @@ class Grapher(nn.Module):
             残差连接: 缓解梯度消失
     """
     def forward(self, x):
-        _tmp = x  # 保存残差连接
-        # 步骤5.1: 线性变换
-        x = self.fc1(x) # # [B,C,H,W] → [B,C,H,W] (1×1卷积)
+        _tmp = x  # 保存残差连接 例：torch.Size([8, 80, 16, 64]) 8张图，每张图有80个特征通道，分辨率16×64像素，
+        # 步骤5.1: 线性变换，fc1是一个1×1卷积 + BatchNorm，作用是：1.对每个位置的80个特征进行线性组合；2.保持输入输出尺寸不变，只做特征变换；3.类似于Transformer中的位置前馈网络 4.就像给每个像素点的特征做一个"特征重组"。
+        x = self.fc1(x) # torch.Size([8, 80, 16, 64]) [B,C,H,W] → [B,C,H,W] (1×1卷积)
         # 步骤5.2: 动态图卷积
-        B, C, H, W = x.shape
-        relative_pos = self._get_relative_pos(self.relative_pos, H, W)
+        B, C, H, W = x.shape # B=8 (batch_size), C=80 (channels), H=16 (height), W=64 (width) 总像素点（节点数）N = H × W = 16 × 64 = 1024
+        """
+            问题：图卷积将像素看作"节点"，但失去了像素间的空间位置关系；
+            解决方案：添加位置编码，告诉模型"哪些像素在空间上靠近"；
+            类比：就像给地图上的每个点标记经纬度坐标
+        """
+        relative_pos = self._get_relative_pos(self.relative_pos, H, W) # relative_pos：torch.Size([1, 1024, 64]) H：16 W：64 -> relative_pos：torch.Size([1, 1024, 64])
         if self.conv == 'lhg':
             # 超图卷积分支
-            x = self.graph_conv(x, relative_pos,num_clusters=self.num_clusters, top_clusters=self.top_clusters)
+            """
+               大型相亲交友活动执行过程0
+            """
+            x = self.graph_conv(x=x, relative_pos=relative_pos, num_clusters=self.num_clusters, top_clusters=self.top_clusters)
         else:
-            x = self.graph_conv(x,relative_pos)
+            x = self.graph_conv(x=x, relative_pos=relative_pos)
         # 步骤5.3: 线性变换恢复通道
         x = self.fc2(x) # [B,C*channel_mul,H,W] → [B,C,H,W]
         # 步骤5.4: DropPath + 残差连接
