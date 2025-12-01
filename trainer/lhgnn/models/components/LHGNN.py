@@ -86,8 +86,14 @@ class LHGNN(nn.Module):
         else:
             channel_mul = 2 # 其他卷积concat 2种特征
         reduce_ratios = [4,2,1,1] # 作用: 每个stage的下采样比率，影响: 控制每个阶段的下采样程度，早期下采样更多。
-        num_clusters = [int (x.item()) for x in torch.linspace(clusters,clusters,self.num_blocks)] # 每个块使用的聚类数，这里每个块都固定为clusters。
-        num_knn = [int(x.item()) for x in torch.linspace(k,k,self.num_blocks)] # 每个块使用的knn数，这里每个块都固定为k。
+        # 方法A：
+        num_clusters = [clusters] * self.num_blocks # 每个块使用的聚类数，这里每个块都固定为clusters。
+        # 方法B：实现真正的渐进变化（如果需要）
+        # num_clusters = [
+        #     int(torch.linspace(clusters // 2, clusters * 2, self.num_blocks)[i].item())
+        #     for i in range(self.num_blocks)
+        # ]
+        num_knn = [k] * self.num_blocks # 每个块使用的knn数，这里每个块都固定为k。
         max_dilation = 128//max(num_clusters) # 最大膨胀系数，根据聚类数计算。
         """
             作用：快速下采样，提取低级特征（边缘、纹理等）
@@ -237,36 +243,18 @@ class LHGNN(nn.Module):
         """
         # Batch, Chennel, Heigth, Width
         B, C, H, W = x.shape
-
         """ 
             节点4：多阶段GNN Backbone
                 输入: [B,80,H,W]
                 输出: [B,640,H/32,W/32]
-                调用：节点5_Grapher + 节点8_ConvFF
-                > 每个stage包含：
-                    > 下采样模块 (DownSample): 用于 stage 间过渡，将空间尺寸减半（HW//4），通道数加倍（如 80→160），减少计算量并扩大感受野。
-                    > 多个Grapher+ConvFFN模块: 每个 stage 包含若干个 Grapher（图卷积单元）和 ConvFFN（前馈网络），是特征加工的核心。
-                    
-                > 配置示例 (size='s'):
-                   > blocks = [2, 2, 6, 2]          # 各stage的Grapher数量
-                   > channels = [80, 160, 400, 640] # 各stage通道数,通道数逐步增加
-                   > reduce_ratios = [4, 2, 1, 1]   # 各stage下采样率，下采样率逐渐减小
-                   
-                Grapher 架构:
-                        输入 → FC1(1×1卷积) → 图卷积 → FC2(1×1卷积) → DropPath → 残差连接 → ConvFFN
-                    数学表达:
-                        h₁ = FC1(x)
-                        h₂ = GraphConv(h₁, edge_index)  # 动态图卷积
-                        h₃ = FC2(h₂)
-                        h₄ = DropPath(h₃) + x          # 残差连接
-                        output = ConvFFN(h₄)           # 前馈网络
-                        
-                ConvFFN（前馈网络）位于每个 Grapher 之后，结构为 “1×1 卷积→激活→1×1 卷积”，作用是对图卷积输出的特征进行非线性变换，增强模型表达能力：
-                    输入通道数 = 输出通道数（与当前 stage 通道一致）。
-                    隐藏层通道数为输入的 4 倍（如 80→320→80），使用 gelu 等激活函数。
+            渐进式特征抽象:
+                分辨率递减：1024 → 512 → 256 → 128 → 64像素
+                通道递增：80 → 160 → 400 → 640通道
+                感受野递增：局部 → 中等 → 全局
+                语义层次递增：边缘纹理 → 部件 → 物体 → 语义
         """
         for i in range(len(self.backbone)): # [2, 2, 6, 2]
-            x = self.backbone[i](x) # x: torch.Size([8, 80, 16, 64])
+            x = self.backbone[i](x) # x: [8, 80, 16, 64]
         """
             节点5：Grapher图卷积模块(动态图卷积)
                 位置: torch_vertex.py → Grapher 类

@@ -11,6 +11,7 @@ def get_2d_relative_pos_embed(embed_dim, grid_size):
     return:
     pos_embed: [grid_size*grid_size, grid_size*grid_size]
     """
+    # 生成1D正弦-余弦编码 embed_dim:80，grid_size:1024**0.5 -> [1024, 80]
     pos_embed = get_2d_sincos_pos_embed(embed_dim, grid_size)
     relative_pos = 2 * np.matmul(pos_embed, pos_embed.transpose()) / pos_embed.shape[1]
     return relative_pos

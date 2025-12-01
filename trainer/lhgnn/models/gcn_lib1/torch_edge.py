@@ -148,6 +148,13 @@ def xy_dense_knn_matrix(x, y, k=16, relative_pos=None):
        """
         dist = xy_pairwise_distance(x.detach(), y.detach())
         if relative_pos is not None:
+            """
+               大型相亲交友活动执行过程3
+               考虑地理位置：看看住哪里
+               比喻：在看长相相似度的同时，还要考虑两个人的住址距离：
+               如果两人住同一个小区，加分（更容易成为朋友）
+               如果两人住不同城市，减分（更难成为朋友）
+            """
             dist += relative_pos
         _, nn_idx = torch.topk(-dist, k=k)
         center_idx = torch.arange(0, n_points, device=x.device).repeat(batch_size, k, 1).transpose(2, 1)
@@ -179,8 +186,14 @@ class DenseDilated(nn.Module):
         else:
             # 先选择 k*dilation 个邻居，然后每隔dilation个采样
             """
-                节点A的10个最近邻: [A, B, E, D, C, ...]  ← 按距离排序
-                索引位置: [0, 1, 2, 3, 4, 5]
+                大型相亲交友活动执行过程5
+                5. 精选最终朋友：隔一个选一个
+                比喻：从20个候选人中，每隔一个选一个，最终选出10个：
+                原始20个候选人：[A(1), B(2), C(3), D(4), E(5), F(6), G(7), H(8), I(9), J(10), 
+                                 K(11), L(12), M(13), N(14), O(15), P(16), Q(17), R(18), S(19), T(20)]
+                
+                每隔2个选1个：→ 选第1、3、5、7、9、11、13、15、17、19个
+                最终10个朋友： [A, C, E, G, I, K, M, O, Q, S]
             """
             edge_index = edge_index[:, :, :, ::self.dilation]
         return edge_index
@@ -214,30 +227,28 @@ class DenseDilatedKnnGraph(nn.Module):
         if y is not None:
             #### normalize
             """
-            1、特征归一化：效果: 所有特征向量长度变为1，只保留方向信息
+                大型相亲交友活动执行过程1
+                1. 特征归一化：先"脱掉外套"看本质
+                比喻：先让所有人脱掉名牌衣服、摘掉贵重首饰，只保留身高、体型、发色这些本质特征，避免"有钱就是好朋友"的偏见。
                 归一化前: [1.2, 2.3, 0.8] → 长度 =√(1.2²+2.3²+0.8²) = 2.7
                 归一化后: [0.44, 0.85, 0.29] → 长度 = 1
             """
             x = F.normalize(x, p=2.0, dim=1) # L2归一化
             y = F.normalize(y, p=2.0, dim=1)
             """
-                2、计算距离矩阵
+                大型相亲交友活动执行过程2
+                2、计算距离矩阵 计算相似度：拍合影对比 
+                比喻：给所有人拍一张大合影，然后用人脸识别技术计算每两个人之间的相似度分数。
                 计算距离矩阵：dist(i,j) = ||x_i||² - 2·x_i·x_jᵀ + ||x_j||²
-                节点: A, B, C, D, E
-                距离矩阵:
-                    A   B   C   D   E
-                A   0   0.2 0.8 0.5 0.3
-                B   0.2 0   0.7 0.6 0.4
-                C   0.8 0.7 0   0.9 0.7
-                D   0.5 0.6 0.9 0   0.8
-                E   0.3 0.4 0.7 0.8 0
-                3、选择K个最近邻
-                    假设 k=3, 为每个节点选择距离最小的3个邻居
-                    节点A的邻居: [A(0), B(0.2), E(0.3)]  ← 距离从小到大
-                    节点B的邻居: [B(0), A(0.2), E(0.4)]
-                    节点C的邻居: [C(0), B(0.7), E(0.7)]
-                    ...
             """
+            """
+                大型相亲交友活动执行过程4
+                4. 初选候选朋友：先找一批可能的朋友
+                    比喻：先给每个人找出 20个可能的候选人（如果最终只需要10个朋友）：
+                    按"长相相似度+住址距离"综合评分排序
+                    选出前20个评分最高的候选人
+            """
+            # 要找 k×dilation 个候选人
             edge_index = xy_dense_knn_matrix(x, y, self.k * self.dilation, relative_pos)
         else:
             #### normalize
