@@ -1,0 +1,31 @@
+# @package _global_
+data: ./data/mnist  # 数据集根目录
+train: train  # 训练集相对路径
+val: val      # 验证集相对路径
+test: test    # 测试集相对路径（可选）
+
+# 类别数
+nc: 10
+
+# 类别名称
+names: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+
+# 数据集配置
+img_size: 224  # 输入图像尺寸
+channels: 3    # 输入通道数（MNIST是单通道，但YOLO默认需要3通道）
+
+# 数据增强配置
+augment: true
+hsv_h: 0.015  # 图像HSV-色相增强（分数）
+hsv_s: 0.7    # 图像HSV-饱和度增强（分数）
+hsv_v: 0.4    # 图像HSV-明度增强（分数）
+degrees: 0.0  # 旋转角度范围（+/- 角度）
+translate: 0.1  # 平移比例范围（+/- 分数）
+scale: 0.5    # 缩放比例范围（+/- 增益）
+shear: 0.0    # 剪切角度范围（+/- 角度）
+perspective: 0.0  # 透视变换范围（+/- 分数）
+flipud: 0.0   # 上下翻转概率
+fliplr: 0.5   # 左右翻转概率
+mosaic: 1.0   # 马赛克增强概率
+mixup: 0.0    # MixUp增强概率
+copy_paste: 0.0  # 复制粘贴增强概率
