@@ -21,7 +21,7 @@ import time
 # 基础配置
 # =========================
 
-GREMLIN_URL = "ws://localhost:8182/gremlin"
+GREMLIN_URL = "ws://localhost:8090/gremlin"
 GREMLIN_TRAVERSAL_SOURCE = "g"
 
 
