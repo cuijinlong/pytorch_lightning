@@ -40,3 +40,6 @@ pip install librosa==0.10.1
 pip install numpy==1.24.4
 pip install torchmetrics==0.11.0
 pip install opencv-python-headless==4.9.0.80 albucore==0.0.24
+pip install gremlinpython
+pip install tornado
+pip install aiohttp
