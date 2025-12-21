@@ -1244,15 +1244,16 @@ class EdgeQueryDemo:
         # 2.1 查询有特定属性的边
         print("\n2.1 查询有'治疗费用'属性的边:")
         gremlin = """
-        g.E().hasLabel('治疗')
-         .has('治疗费用')
-         .limit(3)
-         .project('医生', '患者', '费用')
-         .by(outV().values('姓名'))
-         .by(inV().values('姓名'))
-         .by('治疗费用')
+            g.E().hasLabel('治疗')
+             .has('治疗费用')
+             .limit(3)
+             .project('医生', '患者', '费用')
+             .by(outV().values('姓名'))
+             .by(inV().values('姓名'))
+             .by('治疗费用')
         """
         edges = self.system.submit(gremlin)
+        print(edges)
         for edge in edges:
             print(f"  {edge['医生']} -> {edge['患者']}: ¥{edge['费用']}")
 
